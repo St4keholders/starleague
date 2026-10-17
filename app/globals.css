@@ -236,7 +236,7 @@ button:disabled { cursor: default; opacity: 0.5; }
 }
 
 /* ---------- juego en el celular ---------- */
-.pad.view { grid-template-columns: 22% 1fr 22%; background: #000; padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); }
+.pad.view { grid-template-columns: 24% 1fr 30%; background: #000; padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); }
 .pad-canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; z-index: 0; display: block; }
 .pad.view .pad-col, .pad.view .pad-mid { position: relative; z-index: 1; }
 .pad.view .pad-mid { pointer-events: none; justify-content: flex-end; gap: 8px; padding-bottom: 34px; }
@@ -258,3 +258,59 @@ button:disabled { cursor: default; opacity: 0.5; }
 .view-steer { height: 34%; width: 100%; display: flex; }
 .view-steer .steer-btns { flex: 1; }
 .view-loading { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; font-family: var(--pix); font-size: 12px; color: var(--gold); background: rgba(8, 4, 18, 0.7); pointer-events: none; }
+
+/* ---------- manejo automático ---------- */
+.pad-col-big { flex: 2.2; display: flex; min-height: 0; }
+.pad-col-big .pad-btn { flex: 1; }
+.pad.view .pad-col.right .steer-btns { flex: 1; height: 100%; }
+.pad.view .pad-col.right .pad-btn.steer { font-size: clamp(20px, 9vh, 44px); }
+.pad.view.tilt .pad-col.right .pad-btn.drift { flex: 1; font-size: clamp(12px, 4vh, 20px); }
+.pad-obj { width: 100%; font-family: var(--pix); font-size: 9px; line-height: 1.5; color: var(--cyan); text-align: center; }
+
+/* ---------- modo historia ---------- */
+.sel { font-family: var(--pix); font-size: 10px; padding: 9px 8px; background: #1a0f33; border: 2px solid var(--cyan); color: #fff; max-width: 340px; }
+.overlay.cine { cursor: pointer; }
+.cine .bar { position: absolute; left: 0; right: 0; height: 9vh; background: #000; }
+.cine .bar.top { top: 0; }
+.cine .bar.bottom { bottom: 0; }
+.cine-skip { position: absolute; top: 2vh; right: 2vw; z-index: 3; font-family: var(--pix); font-size: 11px; padding: 9px 12px; background: rgba(18, 10, 36, 0.8); border: 2px solid var(--line); color: #fff; }
+.cine-title { position: absolute; left: 0; right: 0; top: 30%; text-align: center; animation: titlein 3s ease both; pointer-events: none; }
+.cine-title .t1 { font-family: var(--pix); font-size: clamp(22px, 5vw, 56px); color: var(--gold); text-shadow: 4px 4px 0 #5a3cc8, 8px 8px 0 #07040f; }
+.cine-title .t2 { font-family: var(--pix); font-size: clamp(12px, 2vw, 22px); color: #fff; margin-top: 18px; text-shadow: 3px 3px 0 #07040f; }
+@keyframes titlein { 0% { opacity: 0; transform: scale(1.15); } 15%, 80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+.cine-box { position: absolute; left: 50%; bottom: 11vh; transform: translateX(-50%); width: min(92vw, 1000px); display: flex; gap: 18px; align-items: center; padding: 16px 22px; background: rgba(12, 6, 26, 0.92); border: 3px solid var(--gold); box-shadow: 8px 8px 0 #07040f; }
+.cine-box.shadow { border-color: #b44dff; }
+.cine-box.villain { border-color: #b44dff; background: rgba(30, 6, 44, 0.94); }
+.cine-face { width: clamp(64px, 11vh, 110px); height: clamp(64px, 11vh, 110px); flex: none; display: flex; align-items: center; justify-content: center; background: #1a0f33; border: 2px solid var(--line); }
+.cine-face img { width: 100%; height: 100%; image-rendering: pixelated; }
+.cine-face span { font-size: 44px; color: var(--gold); }
+.cine-text { flex: 1; min-width: 0; }
+.cine-name { font-family: var(--pix); font-size: clamp(11px, 1.6vh, 15px); color: var(--gold); margin-bottom: 10px; }
+.cine-box.villain .cine-name, .cine-box.shadow .cine-name { color: #d98aff; }
+.cine-line { font-size: clamp(17px, 2.7vh, 26px); line-height: 1.45; color: #fff; min-height: 2.9em; }
+.caret { color: var(--gold); }
+.cine-hint { position: absolute; right: 12px; bottom: 6px; font-size: 11px; color: var(--mute); }
+.story-card { min-width: 420px; text-align: center; }
+.story-card.win h2 { color: #3ddc84; }
+.story-card.lose h2 { color: var(--coral); }
+.story-obj { color: var(--mute); font-size: 15px; line-height: 1.5; margin: 0 0 6px; text-align: center; }
+.end-star { font-size: 72px; color: var(--gold); text-align: center; text-shadow: 0 0 30px rgba(255, 210, 63, 0.8); animation: spin 6s linear infinite; }
+.end-heroes { display: flex; justify-content: center; gap: 10px; }
+.end-heroes img { width: 88px; height: 88px; image-rendering: pixelated; }
+.credits { font-family: var(--pix); font-size: 9px; line-height: 2; color: var(--mute); text-align: center; }
+
+/* ---------- historia en el celular ---------- */
+.m-sel { font-family: var(--pix); font-size: 11px; padding: 12px 8px; background: #1a0f33; border: 2px solid var(--cyan); color: #fff; width: 100%; }
+.m-cine { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; background: radial-gradient(circle at 50% 30%, #241548, #07040f); }
+.m-cine-title { display: flex; flex-direction: column; gap: 8px; }
+.m-cine-title b { font-family: var(--pix); font-size: 18px; color: var(--gold); text-shadow: 3px 3px 0 #5a3cc8; }
+.m-cine-title span { font-family: var(--pix); font-size: 11px; color: #fff; }
+.m-cine-box { width: min(560px, 100%); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px; background: rgba(12, 6, 26, 0.92); border: 3px solid var(--gold); }
+.m-cine-box.villain { border-color: #b44dff; }
+.m-cine-face img { width: 84px; height: 84px; image-rendering: pixelated; }
+.m-cine-face img.shadow { filter: grayscale(0.6) brightness(0.55) sepia(1) hue-rotate(230deg) saturate(3); }
+.m-cine-face span { font-size: 48px; color: var(--gold); }
+.m-cine-name { font-family: var(--pix); font-size: 11px; color: var(--gold); }
+.m-cine-box.villain .m-cine-name { color: #d98aff; }
+.m-cine-text { font-size: 17px; line-height: 1.5; color: #fff; margin: 0; }
+.m-cine-btns { width: min(560px, 100%); }

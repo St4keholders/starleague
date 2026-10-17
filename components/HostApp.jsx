@@ -4,7 +4,8 @@ import QRCode from 'qrcode';
 import { GameHost, peerParamsString } from '../game/engine';
 import { PASSWORD_HASH, CHARACTERS, MODES, DIFFICULTIES, TRACK_NAMES, SLOT_COLORS, SLOT_NAMES, charById, GAME_NAME } from '../game/constants';
 import { sha256 } from '../game/sha256';
-import { getSprites } from '../game/sprites';
+import { getSprites, getShadowPortrait } from '../game/sprites';
+import { STORY_LEVELS } from '../game/story';
 import { fmtTime } from '../game/render';
 
 export default function HostApp() {
@@ -75,6 +76,7 @@ function Game() {
     setSt(host.snapshot());
     const sp = getSprites();
     const p = {}; for (const id in sp.portraits) p[id] = sp.portraits[id].toDataURL();
+    for (const id in sp.portraits) { try { p[`shadow-${id}`] = getShadowPortrait(id).toDataURL(); } catch (e) { /* nada */ } }
     const it = {}; for (const id in sp.items) it[id] = sp.items[id].toDataURL();
     setPortraits(p); setItems(it);
     const unlock = () => { host.audio.init(); if (host.phase === 'lobby' && host.audio.song === -1) host.audio.playSong(6); };
@@ -97,6 +99,9 @@ function Game() {
       {st && host && st.phase === 'race' && st.paused && <Pause host={host} />}
       {st && host && st.phase === 'results' && <Results st={st} host={host} portraits={portraits} />}
       {st && host && st.phase === 'podium' && <Podium st={st} host={host} portraits={portraits} />}
+      {st && host && st.phase === 'cinematic' && <Cinematic st={st} host={host} portraits={portraits} />}
+      {st && host && st.phase === 'storyresult' && <StoryResult st={st} host={host} />}
+      {st && host && st.phase === 'storyend' && <StoryEnd host={host} portraits={portraits} st={st} />}
       {st && host && st.phase === 'race' && !st.paused && <button className="corner-btn" onClick={() => host.togglePause()} title="Pausa (Esc)">II</button>}
     </div>
   );
@@ -125,7 +130,7 @@ function Lobby({ st, host, qr, url, portraits }) {
                     <img className="slot-face" src={portraits[p.char]} alt="" />
                     <div className="slot-info">
                       <div className="slot-name">{charById(p.char).name}</div>
-                      <div className="slot-meta">{p.manual ? 'Manual' : 'Automática'} · {p.kind === 'phone' ? (p.connected ? '📱 Celular' : '📱 Desconectado') : p.kind === 'kbA' ? '⌨ WASD' : '⌨ Flechas'}</div>
+                      <div className="slot-meta">{p.kind === 'phone' ? (p.connected ? '📱 Celular' : '📱 Desconectado') : p.kind === 'kbA' ? '⌨ WASD' : '⌨ Flechas'}</div>
                       <div className="slot-power">{charById(p.char).powerName}</div>
                     </div>
                     <button className="slot-x" title="Quitar" onClick={() => host.removePlayer(i)}>✕</button>
@@ -163,6 +168,14 @@ function Lobby({ st, host, qr, url, portraits }) {
             </div>
           </div>
         )}
+        {cfg.mode === 'historia' && (
+          <div className="cfg-group">
+            <div className="cfg-label">Empezar en</div>
+            <select className="sel" value={cfg.level || 0} onChange={(e) => host.setCfg({ level: Number(e.target.value) })}>
+              {STORY_LEVELS.map((l, i) => <option key={l.n} value={i}>{l.n}. {l.title} · {l.chapter.split('·')[1] || l.chapter}</option>)}
+            </select>
+          </div>
+        )}
         <div className="cfg-group">
           <div className="cfg-label">Rivales</div>
           <div className="seg">
@@ -172,7 +185,7 @@ function Lobby({ st, host, qr, url, portraits }) {
         <button className="btn gold start" disabled={!n} onClick={() => host.startGame()}>{n ? '¡Empezar!' : 'Esperando jugadores'}</button>
       </div>
       <div className="lobby-foot">
-        <span>Teclado de respaldo · <b>J con WASD</b>: W acelera, A/D gira, S frena, Espacio derrapa, Q objeto, E poder, R/F marchas · <b>J con flechas</b>: Shift der. derrapa, «-» objeto, «.» poder, RePág/AvPág marchas · En el lobby: A/D o ←/→ cambia personaje, S o ↓ cambia la caja</span>
+        <span>El carro acelera solo · Teclado de respaldo: <b>J con WASD</b> (W para unirse): A/D gira, S frena, Espacio derrapa, Q objeto, E poder · <b>J con flechas</b> (↑ para unirse): ←/→ gira, ↓ frena, Shift der. derrapa, «-» objeto, «.» poder · En el lobby: A/D o ←/→ cambia personaje</span>
         <span className="foot-btns">
           <button className="mini" onClick={() => host.toggleMute()}>{st.muted ? '🔇 Sonido' : '🔊 Sonido'}</button>
           <button className="mini" onClick={fullscreen}>⛶ Pantalla completa</button>
@@ -249,6 +262,91 @@ function Podium({ st, host, portraits }) {
           {list.slice(3).map((s) => <li key={s.key} style={s.human ? { color: SLOT_COLORS[s.slot] } : undefined}>{s.place}º {s.name}{s.human ? ` ${SLOT_NAMES[s.slot]}` : ''} — {s.points} pts</li>)}
         </ol>
         <button className="btn gold" onClick={() => host.next()} autoFocus>Volver al lobby</button>
+      </div>
+    </div>
+  );
+}
+
+function Typewriter({ text, id, host }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    setN(0);
+    let i = 0;
+    const t = setInterval(() => { i += 1; setN(i); if (i >= text.length) clearInterval(t); }, 26);
+    host.cineHook = () => { if (i < text.length) { i = text.length; setN(i); clearInterval(t); return true; } return false; };
+    return () => { clearInterval(t); host.cineHook = null; };
+  }, [id]);
+  return <>{text.slice(0, n)}<span className="caret">{n < text.length ? '' : ' ▶'}</span></>;
+}
+
+function Cinematic({ st, host, portraits }) {
+  const c = st.cine;
+  if (!c || c.done) return <div className="overlay cine"><div className="bar top" /><div className="bar bottom" /></div>;
+  const line = c.line;
+  const face = line && line.char ? portraits[line.shadow ? `shadow-${line.char}` : line.char] : null;
+  return (
+    <div className="overlay cine" onClick={() => { if (!(host.cineHook && host.cineHook())) host.cineNext(); }}>
+      <div className="bar top" />
+      <div className="bar bottom" />
+      <button className="cine-skip" onClick={(e) => { e.stopPropagation(); host.cineSkip(); }}>Saltar ⏭</button>
+      {c.title && (
+        <div className="cine-title" key={c.v}>
+          <div className="t1">{c.title}</div>
+          {c.sub && <div className="t2">{c.sub}</div>}
+        </div>
+      )}
+      {line && (
+        <div className={'cine-box' + (line.char === 'baron' ? ' villain' : line.shadow ? ' shadow' : '')}>
+          <div className="cine-face">{face ? <img src={face} alt="" /> : <span>★</span>}</div>
+          <div className="cine-text">
+            <div className="cine-name">{line.name}</div>
+            <div className="cine-line"><Typewriter text={line.text} id={line.id} host={host} /></div>
+          </div>
+          <div className="cine-hint">Enter o clic</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StoryResult({ st, host }) {
+  const s = st.story || {};
+  const win = s.result === 'win';
+  const last = s.n >= s.total;
+  return (
+    <div className="overlay center">
+      <div className={'card story-card ' + (win ? 'win' : 'lose')}>
+        <div className="sub">Nivel {s.n} de {s.total} · {s.chapter}</div>
+        <h2>{win ? '¡Nivel superado!' : 'No lo lograron'}</h2>
+        <p className="story-obj">{s.title} — {s.obj}</p>
+        {win ? (
+          <button className="btn gold" autoFocus onClick={() => host.next()}>{last ? 'Ver el final' : 'Continuar'}</button>
+        ) : (
+          <>
+            <button className="btn gold" autoFocus onClick={() => host.next()}>Reintentar</button>
+            <button className="btn" onClick={() => host.skipLevel()}>Saltar este nivel</button>
+          </>
+        )}
+        <button className="btn" onClick={() => host.toLobby()}>Salir de la historia</button>
+      </div>
+    </div>
+  );
+}
+
+function StoryEnd({ host, portraits, st }) {
+  const heroes = st.players.filter(Boolean).map((p) => p.char);
+  return (
+    <div className="overlay center story-end">
+      <div className="card podium">
+        <div className="end-star">★</div>
+        <h2>¡La Estrella Madre volvió a brillar!</h2>
+        <p className="story-obj">Recuperaron los cinco fragmentos y derrotaron al Barón Eclipse.</p>
+        <div className="end-heroes">{heroes.map((c, i) => <img key={i} src={portraits[c]} alt="" />)}</div>
+        <div className="credits">
+          <div>STAR LEAGUE · El Robo de las Estrellas</div>
+          <div>Un juego para jugar en familia</div>
+        </div>
+        <button className="btn gold" autoFocus onClick={() => host.next()}>Volver al lobby</button>
       </div>
     </div>
   );

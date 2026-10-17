@@ -1,5 +1,5 @@
 // Generación procedural de sprites pixel art (sin descargar imágenes)
-import { CHARACTERS } from './constants.js';
+import { CHARACTERS, VILLAIN } from './constants.js';
 
 export function mkCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -177,9 +177,58 @@ function kartModel(ch) {
       v.box(-6, -5, 2, 3, 6, 8, '#e8342c');
       break;
     }
+    case 'baron': {
+      // capa, máscara blanca, corona dorada y ojos que brillan
+      v.box(-9, -6, -6, 6, 4, 14, '#4a1a6a');
+      v.box(-9, -9, -6, 6, 5, 13, '#2a0c3c');
+      v.box(-3, 1, -4, 4, 4, 9, '#1d1028');
+      v.box(-2, 0, -6, -5, 6, 9, '#4a1a6a'); v.box(-2, 0, 5, 6, 6, 9, '#4a1a6a');
+      v.sphere(-1, 0, 13, 4.8, null, (x, y, z) => (x >= 2 && z >= -2 && z <= 2 ? '#f2eef8' : '#241232'));
+      v.set(4, -2, 13, '#ffe45c'); v.set(4, 2, 13, '#ffe45c'); v.set(4, -2, 14, '#ffe45c'); v.set(4, 2, 14, '#ffe45c');
+      v.box(4, 4, -1, 1, 11, 11, '#1d1028');
+      for (let a = 0; a < 20; a++) {
+        const yy = Math.round(Math.sin((a / 20) * Math.PI * 2) * 3.6), xx = Math.round(Math.cos((a / 20) * Math.PI * 2) * 3.6) - 1;
+        v.set(xx, yy, 18, '#ffd23f');
+        if (a % 4 === 0) { v.set(xx, yy, 19, '#ffd23f'); v.set(xx, yy, 20, '#ffd23f'); }
+      }
+      v.set(2, 0, 19, '#b44dff');
+      break;
+    }
     default: break;
   }
   return v;
+}
+
+// versión "sombra" de un sprite: oscuro, morado y con brillo alrededor
+export function shadowify(src) {
+  const w = src.width, h = src.height;
+  const c = mkCanvas(w, h), x = c.getContext('2d');
+  x.drawImage(src, 0, 0);
+  const img = x.getImageData(0, 0, w, h), d = img.data;
+  const solid = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const a = d[i * 4 + 3];
+    if (a < 40) continue;
+    solid[i] = 1;
+    const r = d[i * 4], g = d[i * 4 + 1], b = d[i * 4 + 2];
+    const lum = (r + g + b) / 3;
+    // rampa morada con buen contraste (se siguen viendo cara y detalles)
+    const t = Math.pow(lum / 255, 0.8);
+    if (lum > 205) { d[i * 4] = 255; d[i * 4 + 1] = 120; d[i * 4 + 2] = 245; }
+    else { d[i * 4] = Math.min(255, 26 + t * 190); d[i * 4 + 1] = Math.min(255, 8 + t * 95); d[i * 4 + 2] = Math.min(255, 48 + t * 210); }
+  }
+  for (let y = 0; y < h; y++) for (let xx = 0; xx < w; xx++) {
+    const i = y * w + xx;
+    if (solid[i]) continue;
+    let n = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const X = xx + dx, Y = y + dy;
+      if (X >= 0 && Y >= 0 && X < w && Y < h && solid[Y * w + X]) n++;
+    }
+    if (n) { d[i * 4] = 180; d[i * 4 + 1] = 77; d[i * 4 + 2] = 255; d[i * 4 + 3] = 200; }
+  }
+  x.putImageData(img, 0, 0);
+  return c;
 }
 
 const NEIGH = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -239,7 +288,7 @@ let cache = null;
 export function getSprites() {
   if (cache) return cache;
   const karts = {}, portraits = {};
-  for (const ch of CHARACTERS) {
+  for (const ch of [...CHARACTERS, VILLAIN]) {
     const list = prepareVoxels(kartModel(ch));
     const frames = [];
     for (let f = 0; f < KART_FRAMES; f++) {
@@ -248,14 +297,26 @@ export function getSprites() {
     karts[ch.id] = frames;
     portraits[ch.id] = renderVox(list, Math.PI + 0.55, 72, 2.6, 36, 56, 0.3);
   }
-  cache = { karts, portraits, decor: makeDecor(), items: makeItemIcons(), fx: makeFx() };
+  cache = { karts, portraits, shadow: {}, shadowPortraits: {}, decor: makeDecor(), items: makeItemIcons(), fx: makeFx() };
   return cache;
+}
+
+// cuadros en versión sombra (se crean solo cuando un jefe los necesita)
+export function getShadowFrames(id) {
+  const sp = getSprites();
+  if (!sp.shadow[id]) sp.shadow[id] = id === VILLAIN.id ? sp.karts[id] : sp.karts[id].map(shadowify);
+  return sp.shadow[id];
+}
+export function getShadowPortrait(id) {
+  const sp = getSprites();
+  if (!sp.shadowPortraits[id]) sp.shadowPortraits[id] = id === VILLAIN.id ? sp.portraits[id] : shadowify(sp.portraits[id]);
+  return sp.shadowPortraits[id];
 }
 
 // Solo retratos (para el celular)
 export function getPortraitURLs() {
   const out = {};
-  for (const ch of CHARACTERS) {
+  for (const ch of [...CHARACTERS, VILLAIN]) {
     const list = prepareVoxels(kartModel(ch));
     out[ch.id] = renderVox(list, Math.PI + 0.55, 72, 2.6, 36, 56, 0.3).toDataURL();
   }
@@ -396,6 +457,26 @@ function makeDecor() {
     x.fillStyle = '#ff4d5e'; x.beginPath(); x.moveTo(16, 4); x.lineTo(30, 9); x.lineTo(16, 14); x.fill();
     add('flag', c, 34);
   }
+  { // obelisco
+    const c = mkCanvas(20, 56), x = c.getContext('2d');
+    x.fillStyle = '#1a1024'; x.beginPath(); x.moveTo(10, 0); x.lineTo(17, 8); x.lineTo(17, 56); x.lineTo(3, 56); x.lineTo(3, 8); x.fill();
+    rect(x, 3, 8, 4, 48, '#2a1a38');
+    for (let i = 0; i < 4; i++) rect(x, 9, 14 + i * 10, 3, 5, '#b44dff');
+    add('obelisk', c, 40);
+  }
+  { // brasero
+    const c = mkCanvas(18, 30), x = c.getContext('2d');
+    rect(x, 8, 12, 2, 18, '#3a2a48'); rect(x, 3, 10, 12, 3, '#3a2a48'); rect(x, 5, 27, 8, 3, '#3a2a48');
+    ell(x, 9, 6, 5, 6, '#b44dff'); ell(x, 9, 7, 3, 4, '#ff9af0'); rect(x, 8, 7, 2, 3, '#ffffff');
+    add('brazier', c, 26);
+  }
+  { // púas de obsidiana
+    const c = mkCanvas(28, 26), x = c.getContext('2d');
+    const spk = (bx, h, col) => { x.fillStyle = col; x.beginPath(); x.moveTo(bx - 5, 26); x.lineTo(bx, 26 - h); x.lineTo(bx + 5, 26); x.fill(); };
+    spk(8, 20, '#241232'); spk(19, 26, '#1a0c26'); spk(14, 14, '#3a1a52');
+    rect(x, 18, 4, 1, 10, '#b44dff');
+    add('spike', c, 36);
+  }
   return D;
 }
 
@@ -439,6 +520,16 @@ function makeFx() {
     for (let i = 0; i < 10; i++) { const r = i % 2 ? 2.4 : 5.5, a = -Math.PI / 2 + i * Math.PI / 5; x.lineTo(9 + Math.cos(a) * r, 9 + Math.sin(a) * r); }
     x.fill();
     F.box.push({ c: outline(c), w: 20 });
+  }
+  F.star = [];
+  for (let f = 0; f < 4; f++) {
+    const c = mkCanvas(18, 18), x = c.getContext('2d');
+    const sq = [1, 0.7, 0.35, 0.7][f];
+    x.save(); x.translate(9, 9); x.scale(sq, 1);
+    x.fillStyle = '#ffd23f'; x.beginPath();
+    for (let i = 0; i < 10; i++) { const r = i % 2 ? 3.4 : 8, a = -Math.PI / 2 + i * Math.PI / 5; x.lineTo(Math.cos(a) * r, Math.sin(a) * r); }
+    x.fill(); x.fillStyle = '#fff6b0'; x.fillRect(-2, -3, 2, 2); x.restore();
+    F.star.push({ c: outline(c, '#7a4a00'), w: 22 });
   }
   { const c = mkCanvas(36, 14), x = c.getContext('2d'); ell(x, 18, 7, 17, 6, '#121218'); ell(x, 14, 5, 7, 2, '#3a3a60'); add('oil', c, 36); }
   { const c = mkCanvas(64, 22), x = c.getContext('2d'); ell(x, 32, 11, 31, 10, '#b8160e'); ell(x, 30, 10, 24, 7, '#e8261e'); ell(x, 22, 7, 6, 2, '#ff8a7a'); disc(x, 44, 12, 3, '#ffe0a0'); add('salsa', c, 72); }

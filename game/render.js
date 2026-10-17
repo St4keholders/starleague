@@ -1,6 +1,6 @@
 // Render pseudo-3D estilo "modo 7" + sprites + HUD
 import { VIEW_W, VIEW_H, SLOT_COLORS, SLOT_NAMES, LAPS } from './constants.js';
-import { getSprites, KART_FRAMES, KART_SPRITE } from './sprites.js';
+import { getSprites, getShadowFrames, KART_FRAMES, KART_SPRITE } from './sprites.js';
 
 const FONT = '"Press Start 2P", monospace';
 const FOG0 = 620, FOG1 = 1350;
@@ -47,6 +47,7 @@ export class Renderer {
   // ------------------------------------------------------------
   render(sim, viewKarts, ui = {}) {
     const ctx = this.ctx;
+    this.noLabels = !!ui.cinema;
     const vps = layoutFor(viewKarts.length, this.W, this.H);
     const cams = viewKarts.map((k, i) => this.makeCam(k, vps[i]));
     cams.forEach((c) => { this.drawSky(c); this.drawFloor(c); });
@@ -80,6 +81,12 @@ export class Renderer {
     const p = camParams(vp);
     const a = k.camA;
     const ca = Math.cos(a), sa = Math.sin(a);
+    // cámara libre (cinemáticas)
+    if (k.camX !== undefined) {
+      let H = k.camH !== undefined ? k.camH : p.H;
+      if (k.frameDist) H = (0.3 * (vp.h - p.hz) * k.frameDist) / p.focal + (k.camUp || 0);
+      return { vp, ...p, a, ca, sa, x: k.camX, y: k.camY, H, target: k };
+    }
     const lift = Math.max(0, k.z) * 0.6;
     return {
       vp, ...p, a, ca, sa,
@@ -134,6 +141,7 @@ export class Renderer {
   drawFloor(c) {
     const { vp, hz, focal, H, ca, sa } = c;
     const tex = this.t.tex, outer = this.t.outer, buf = this.buf;
+    const ks = 1 / (this.t.scale || 1); // mundo -> píxel de textura
     const hw = vp.w / 2;
     const fogCol = this.fogCol;
     const fr = fogCol & 255, fg = (fogCol >> 8) & 255, fb = (fogCol >> 16) & 255;
@@ -143,9 +151,9 @@ export class Renderer {
       let o = (vp.y + y) * this.W + vp.x;
       if (f > FOG1) { buf.fill(fogCol, o, o + vp.w); continue; }
       const scale = f / focal;
-      let wx = c.x + ca * f + sa * hw * scale;
-      let wy = c.y + sa * f - ca * hw * scale;
-      const sx = -sa * scale, sy = ca * scale;
+      let wx = (c.x + ca * f + sa * hw * scale) * ks;
+      let wy = (c.y + sa * f - ca * hw * scale) * ks;
+      const sx = -sa * scale * ks, sy = ca * scale * ks;
       const fog = f > FOG0 ? (f - FOG0) / (FOG1 - FOG0) : 0;
       if (fog <= 0) {
         for (let x = 0; x < vp.w; x++) {
@@ -198,6 +206,15 @@ export class Renderer {
       const z = 7 + Math.sin(time * 3 + b.x * 0.1) * 2.5;
       const p = this.proj(c, b.x, b.y, z);
       if (p) { push(p, () => { this.shadow(p, c, b.x, b.y, 8); this.billboard(bf.c, p, bf.w); }); }
+    }
+    // estrellas del modo historia
+    if (sim.stars) {
+      const sf = sp.fx.star[Math.floor(time * 8) % 4];
+      for (const st of sim.stars) {
+        if (st.taken) continue;
+        const p = this.proj(c, st.x, st.y, 10 + Math.sin(time * 4 + st.x) * 3);
+        if (p) push(p, () => { this.shadow(p, c, st.x, st.y, 7); this.billboard(sf.c, p, sf.w); });
+      }
     }
     // charcos
     for (const pd of sim.puddles) {
@@ -310,7 +327,7 @@ export class Renderer {
       }
     }
     if (k.invulnT > 0 && k.spinT <= 0 && k.frozenT <= 0 && Math.floor(sim.time * 16) % 2 === 0) return;
-    const frames = this.sp.karts[k.char];
+    const frames = k.boss ? getShadowFrames(k.char) : this.sp.karts[k.char];
     let rel = (k.a + k.spinVis + (k.drift ? k.drift * 0.35 : 0)) - c.a;
     let fi = Math.round((rel / (Math.PI * 2)) * KART_FRAMES) % KART_FRAMES;
     if (fi < 0) fi += KART_FRAMES;
@@ -320,7 +337,7 @@ export class Renderer {
     const bounce = k.boostT > 0 || (k.surface === 'off' && Math.abs(k.v) > 60) ? (Math.floor(sim.time * 20) % 2) * Math.max(1, sc * 0.6) : 0;
     const dx = Math.round(p.sx - KART_SPRITE.ax * sc), dy = Math.round(p.sy - KART_SPRITE.ay * sc - bounce);
     if (k.eliminated) ctx.globalAlpha = 0.45;
-    else if (k !== me && p.f < CAM_DIST - 12) ctx.globalAlpha = 0.5;
+    else if (k !== me && p.f < CAM_DIST - 12 && !this.noLabels) ctx.globalAlpha = 0.5;
     ctx.drawImage(img, dx, dy, Math.round(w), Math.round(h));
     ctx.globalAlpha = 1;
     const cx = p.sx, top = dy + 4 * sc;
@@ -336,8 +353,16 @@ export class Renderer {
         ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(Math.round(bx - 2 * sc), Math.round(by - 3 * sc), Math.max(1, sc * 1.5), Math.max(1, sc * 1.5));
       }
     }
+    // etiqueta de jefe
+    if (k.boss && k !== me && p.f < 900 && !this.noLabels) {
+      const label = sim.story && sim.story.type === 'chase' ? 'LADRÓN' : 'JEFE';
+      ctx.font = `8px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      const ly = Math.round(top - 6);
+      ctx.fillStyle = '#000'; ctx.fillText(label, Math.round(cx) + 1, ly + 1);
+      ctx.fillStyle = Math.floor(sim.time * 4) % 2 ? '#d98aff' : '#b44dff'; ctx.fillText(label, Math.round(cx), ly);
+    }
     // etiqueta de jugador
-    if (k.human && k !== me && p.f < 700) {
+    if (k.human && k !== me && p.f < 700 && !this.noLabels) {
       const label = SLOT_NAMES[k.slot];
       ctx.font = `8px ${FONT}`; ctx.textAlign = 'center';
       const ly = Math.round(top - (sim.mode === 'battle' ? 18 * sc : 4 * sc) - 6);
@@ -361,7 +386,8 @@ export class Renderer {
     const big = vh >= 200;
     const u = big ? 1 : 0.5;
     const pad = big ? 8 : 4;
-    const L = pad + inset, R = vw - pad - inset;
+    const [iL, iR] = Array.isArray(inset) ? inset : [inset, inset];
+    const L = pad + iL, R = vw - pad - iR;
     // destello
     if (k.flashT > 0) { ctx.fillStyle = `rgba(255,250,220,${Math.min(0.92, k.flashT / 1.2)})`; ctx.fillRect(0, 0, vw, vh); }
 
@@ -391,6 +417,7 @@ export class Renderer {
     if (k.rouletteT > 0) icon = ['chile', 'aceite', 'chicle', 'burbuja', 'iman'][Math.floor(sim.time * 14) % 5];
     else if (k.item) icon = k.item;
     if (icon) { const isz = big ? 20 : 14; ctx.drawImage(this.sp.items[icon], bx + (bs - isz) / 2, by + (bs - isz) / 2, isz, isz); }
+    if (sim.objectiveText) this.text(sim.objectiveText, vw / 2, by + bs + 4, big ? 8 : 5, '#7ff6ff', 'center');
 
     // poder
     const py = vh - pad - (big ? 26 : 16);
@@ -406,18 +433,10 @@ export class Renderer {
     else if (ready) this.text('¡PODER!', barX, barY - (big ? 11 : 8), big ? 7 : 5, '#ffd23f');
     else this.text(k.ch.powerName.toUpperCase(), barX, barY - (big ? 11 : 8), big ? 6 : 4, '#c8f0ff');
 
-    // marcha / velocidad
-    const gx = R, gy = vh - pad - (big ? 26 : 16);
-    this.text(`${k.manual ? 'M' : 'A'}${k.gear}`, gx, gy, big ? 14 : 9, k.lug ? '#ff6a6a' : '#ffffff', 'right');
-    const rW = big ? 50 : 30, rH = big ? 5 : 3;
-    const rx = gx - rW, ry = gy + (big ? 18 : 12);
-    ctx.fillStyle = 'rgba(18,10,24,0.8)'; ctx.fillRect(rx - 1, ry - 1, rW + 2, rH + 2);
-    ctx.fillStyle = '#2a8a4a'; ctx.fillRect(rx + Math.round(rW * 0.82), ry, Math.round(rW * 0.18), rH);
-    ctx.fillStyle = k.rpm > 0.82 ? '#3ddc84' : '#ffffff';
-    ctx.fillRect(rx, ry, Math.round(rW * k.rpm), rH);
-    this.text(`${Math.max(0, Math.round(Math.abs(k.v) * 0.5))}km/h`, gx - (big ? 38 : 22), gy + (big ? 3 : 2), big ? 6 : 4, '#c8f0ff', 'right');
-    if (k.lug) this.text('¡CAMBIA!', gx, gy - (big ? 10 : 7), big ? 6 : 4, '#ff6a6a', 'right');
-    else if (k.manual && k.rpm > 0.82 && k.gear < 5) this.text('▲ SUBE', gx, gy - (big ? 10 : 7), big ? 6 : 4, '#3ddc84', 'right');
+    // velocímetro
+    const gx = R, gy = vh - pad - (big ? 22 : 14);
+    this.text(`${Math.max(0, Math.round(Math.abs(k.v) * 0.5))}`, gx - (big ? 34 : 22), gy, big ? 14 : 9, k.boostT > 0 ? '#ffd23f' : '#ffffff', 'right');
+    this.text('km/h', gx, gy + (big ? 6 : 4), big ? 6 : 4, '#c8f0ff', 'right');
 
     // minimapa (1 jugador)
     if (nViews === 1) this.drawMinimap(sim, R - 72, 34, 72);
@@ -436,7 +455,7 @@ export class Renderer {
     ctx.globalAlpha = 0.85;
     ctx.drawImage(mm, x, y, size, size);
     ctx.globalAlpha = 1;
-    const k = size / 2048;
+    const k = size / (this.t.worldSize || 2048);
     for (const kt of sim.karts) {
       if (kt.eliminated) continue;
       ctx.fillStyle = kt.human ? SLOT_COLORS[kt.slot] : kt.ch.kart;
@@ -477,7 +496,8 @@ export class Renderer {
       const name = this.t.def.name.toUpperCase();
       ctx.fillStyle = 'rgba(18,10,24,0.7)'; ctx.fillRect(0, this.H / 2 - 22, this.W, 44);
       this.text(name, this.W / 2, this.H / 2 - 12, 14, '#ffd23f', 'center');
-      this.text(sim.mode === 'battle' ? 'BATALLA DE GLOBOS' : `${LAPS} VUELTAS`, this.W / 2, this.H / 2 + 6, 7, '#ffffff', 'center');
+      const sub = sim.story && sim.story.obj ? sim.story.obj.toUpperCase() : sim.mode === 'battle' ? 'BATALLA DE GLOBOS' : `${sim.laps || LAPS} VUELTAS`;
+      this.text(sub, this.W / 2, this.H / 2 + 6, 7, sim.story ? '#7ff6ff' : '#ffffff', 'center');
       return;
     }
     const n = Math.ceil(sim.countdown);
