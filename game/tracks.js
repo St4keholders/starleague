@@ -12,7 +12,7 @@ export const TRACK_DEFS = [
       { type: 'boost', f: 0.60, l: 32, c: 0.0, hw: 0.4 },
       { type: 'boost', f: 0.83, l: 32, c: 0.35, hw: 0.35 },
     ],
-    boxes: [0.12, 0.47, 0.76],
+    boxes: [0.12, 0.35, 0.58, 0.80],
     obstacles: [],
     hazards: [],
     decor: { tree: 5, bush: 3, windmill: 1, flower: 3 },
@@ -28,7 +28,7 @@ export const TRACK_DEFS = [
       { type: 'ramp', f: 0.75, l: 22, c: 0, hw: 1 },
       { type: 'boost', f: 0.93, l: 32, c: -0.3, hw: 0.35 },
     ],
-    boxes: [0.10, 0.48, 0.81],
+    boxes: [0.10, 0.33, 0.50, 0.81],
     obstacles: [],
     hazards: [
       { type: 'crab', f: 0.36, amp: 0.8, speed: 1.3 },
@@ -50,7 +50,7 @@ export const TRACK_DEFS = [
       { type: 'boost', f: 0.70, l: 32, c: 0, hw: 0.4 },
       { type: 'boost', f: 0.05, l: 32, c: 0.35, hw: 0.35 },
     ],
-    boxes: [0.12, 0.47, 0.73],
+    boxes: [0.12, 0.33, 0.55, 0.73],
     obstacles: [
       { f: 0.17, c: 0.5, r: 13, kind: 'snowman' },
       { f: 0.40, c: -0.55, r: 13, kind: 'snowman' },
@@ -102,6 +102,29 @@ export const TRACK_DEFS = [
     hazards: [],
     decor: { starcrystal: 3, asteroid: 2, pylon: 2 },
   },
+  {
+    id: 'eclipse', name: 'Fortaleza Eclipse', theme: 'eclipse', seed: 77,
+    pts: [[300, 1750], [260, 1150], [500, 900], [350, 600], [500, 300], [850, 280], [1000, 550], [800, 800], [1000, 1050], [1300, 900], [1250, 550], [1500, 300], [1800, 450], [1750, 850], [1500, 1000], [1800, 1250], [1750, 1700], [1400, 1800], [1200, 1550], [950, 1750], [650, 1600]],
+    startAt: [280, 1450],
+    w: 56, ow: 22, outside: 'void',
+    zones: [
+      { type: 'boost', f: 0.10, l: 32, c: 0, hw: 0.4 },
+      { type: 'boost', f: 0.33, l: 32, c: -0.35, hw: 0.35 },
+      { type: 'ramp', f: 0.52, l: 22, c: 0, hw: 1 },
+      { type: 'boost', f: 0.70, l: 32, c: 0.35, hw: 0.35 },
+      { type: 'boost', f: 0.90, l: 32, c: 0, hw: 0.4 },
+    ],
+    boxes: [0.06, 0.28, 0.47, 0.65, 0.84],
+    obstacles: [],
+    hazards: [
+      { type: 'fire', f: 0.20, c: 0.3, period: 3.2, off: 0 },
+      { type: 'fire', f: 0.42, c: -0.3, period: 3.0, off: 1.1 },
+      { type: 'fire', f: 0.60, c: 0, period: 3.4, off: 2.0 },
+      { type: 'fire', f: 0.78, c: -0.3, period: 3.1, off: 0.5 },
+      { type: 'fire', f: 0.95, c: 0.3, period: 3.3, off: 1.6 },
+    ],
+    decor: { obelisk: 3, brazier: 2, spike: 3 },
+  },
 ];
 
 export const ARENA_DEF = {
@@ -115,11 +138,16 @@ export const ARENA_DEF = {
   boxes: [[1024, 700], [1024, 1348], [700, 1024], [1348, 1024], [700, 700], [1348, 1348], [1348, 700], [700, 1348]],
 };
 
+// Las pistas se diseñan en una cuadrícula de 2048 y se agrandan 1,5 veces en el mundo.
+// La textura del piso sigue siendo de 2048 (no gasta más memoria): cada píxel cubre 1,5 unidades.
+export const TRACK_SCALE = 1.5;
+
 const cache = {};
 export function getCenterline(i) {
   if (!cache[i]) {
     const d = TRACK_DEFS[i];
-    cache[i] = buildCenterline(d.pts, d.startAt);
+    const S = TRACK_SCALE;
+    cache[i] = buildCenterline(d.pts.map(([x, y]) => [x * S, y * S]), [d.startAt[0] * S, d.startAt[1] * S]);
   }
   return cache[i];
 }

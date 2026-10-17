@@ -34,7 +34,7 @@ export const CHARACTERS = [
     power: 'temblor', powerName: 'Temblor', powerDesc: 'Hace derrapar a los que están cerca',
   },
   {
-    id: 'lumi', name: 'Lumi', full: 'Lumi la Luciérnaga',
+    id: 'lumi', fem: true, name: 'Lumi', full: 'Lumi la Luciérnaga',
     kart: '#8a52e0', trim: '#ffe45c',
     stats: { speed: 3, accel: 4, handling: 4, weight: 2 },
     power: 'destello', powerName: 'Destello', powerDesc: 'Ciega 2 segundos a los que van adelante',
@@ -46,13 +46,13 @@ export const CHARACTERS = [
     power: 'panal', powerName: 'Panal', powerDesc: 'Persigue al de adelante y lo frena',
   },
   {
-    id: 'nimbo', name: 'Nimbo', full: 'Nimbo la Nube',
+    id: 'nimbo', fem: true, name: 'Nimbo', full: 'Nimbo la Nube',
     kart: '#56b9ff', trim: '#ffffff',
     stats: { speed: 3, accel: 3, handling: 5, weight: 2 },
     power: 'rayo', powerName: 'Rayo', powerDesc: 'Cae sobre el que va primero',
   },
   {
-    id: 'chispa', name: 'Chispa', full: 'Chispa la Ardilla',
+    id: 'chispa', fem: true, name: 'Chispa', full: 'Chispa la Ardilla',
     kart: '#e8452c', trim: '#ffd9a0',
     stats: { speed: 5, accel: 3, handling: 1, weight: 2 },
     power: 'triple', powerName: 'Triple turbo', powerDesc: 'Tres turbos para usar cuando quieras',
@@ -64,12 +64,20 @@ export const CHARACTERS = [
     power: 'salsa', powerName: 'Charco de salsa', powerDesc: 'Deja un charco resbaloso detrás',
   },
   {
-    id: 'gelida', name: 'Gélida', full: 'Gélida la Pingüina',
+    id: 'gelida', fem: true, name: 'Gélida', full: 'Gélida la Pingüina',
     kart: '#2f5fc4', trim: '#bff3ff',
     stats: { speed: 4, accel: 3, handling: 3, weight: 3 },
     power: 'bola', powerName: 'Bola de nieve', powerDesc: 'Rebota por la pista y congela',
   },
 ];
+
+// Villano del modo historia (no se puede elegir)
+export const VILLAIN = {
+  id: 'baron', name: 'Barón Eclipse', full: 'Barón Eclipse',
+  kart: '#2a0c3c', trim: '#b44dff',
+  stats: { speed: 4, accel: 3, handling: 4, weight: 5 },
+  power: 'rayo', powerName: 'Eclipse', powerDesc: 'Rayo oscuro sobre el que va primero',
+};
 
 export const ITEMS = {
   chile: { name: 'Turbo de chile' },
@@ -84,6 +92,7 @@ export const MODES = [
   { id: 'copa', name: 'Copa', desc: 'Las 5 pistas seguidas, con puntos y podio' },
   { id: 'rapida', name: 'Carrera rápida', desc: 'Una pista, una carrera' },
   { id: 'batalla', name: 'Batalla de globos', desc: '3 globos cada uno, gana el último' },
+  { id: 'historia', name: 'Historia', desc: '10 niveles con cinemáticas contra el Barón Eclipse' },
 ];
 
 export const DIFFICULTIES = [
@@ -92,9 +101,18 @@ export const DIFFICULTIES = [
   { id: 2, name: 'Difícil' },
 ];
 
-export const TRACK_NAMES = ['Pradera Molinos', 'Playa Coral', 'Cumbre Nevada', 'Volcán Fortaleza', 'Senda Estelar'];
+export const TRACK_NAMES = ['Pradera Molinos', 'Playa Coral', 'Cumbre Nevada', 'Volcán Fortaleza', 'Senda Estelar', 'Fortaleza Eclipse'];
+export const CUP_TRACKS = [0, 1, 2, 3, 4];
 export const ARENA_NAME = 'Arena Cometa';
 
 export function charById(id) {
+  if (id === VILLAIN.id) return VILLAIN;
   return CHARACTERS.find((c) => c.id === id) || CHARACTERS[0];
+}
+
+// nombre del jefe en versión sombra
+export function shadowName(id) {
+  if (id === VILLAIN.id) return VILLAIN.name;
+  const c = charById(id);
+  return `${c.name} ${c.fem ? 'Sombría' : 'Sombrío'}`;
 }

@@ -21,17 +21,20 @@ export class MirrorSim {
     this.mode = init.mode;
     this.laps = init.laps;
     this.time = 0; this.raceTime = 0; this.started = false; this.countdown = 4.2; this.battleLeft = 0;
-    this.karts = init.karts.map(([char, human, slot, manual], i) => ({
-      id: i, char, ch: charById(char), human: !!human, slot, manual: !!manual,
+    this.karts = init.karts.map(([char, human, slot, boss], i) => ({
+      id: i, char, ch: charById(char), human: !!human, slot, boss: boss || 0,
       x: 0, y: 0, z: 0, a: 0, camA: 0, spinVis: 0, drift: 0, driftLevel: 0,
       boostT: 0, surface: 'road', v: 0, invulnT: 0, spinT: 0, frozenT: 0, shieldT: 0, stickyT: 0,
       eliminated: false, balloons: 3, fallT: 0, place: i + 1, lap: 1, finished: false, finishTime: 0,
-      flashT: 0, rouletteT: 0, item: null, power: 0, charges: 0, gear: 1, rpm: 0, lug: false,
+      flashT: 0, rouletteT: 0, item: null, power: 0, charges: 0,
       message: '', messageT: 0, init: false,
     }));
     this.boxes = init.boxes.map(([x, y]) => ({ x, y, t: 0 }));
     this.hazards = init.hazards.map(([type, period]) => ({ type, period, x: 0, y: 0, phase: 0 }));
     this.projs = []; this.puddles = []; this.effects = []; this.parts = [];
+    this.story = init.story || null;
+    this.stars = init.stars ? init.stars.map(([x, y]) => ({ x, y, taken: false })) : null;
+    this.objectiveText = '';
     this.snaps = [];
     this.offset = null;
   }
@@ -49,6 +52,7 @@ export class MirrorSim {
     this.projs = s.p.map(([t, x, y]) => ({ type: PROJ_TYPES[t], x, y, r: t === 1 ? 15 : t === 2 ? 8 : 9 }));
     this.puddles = s.d.map(([t, x, y, r]) => ({ type: t ? 'salsa' : 'oil', x, y, r }));
     s.h.forEach(([x, y, ph], i) => { const h = this.hazards[i]; if (h) { h.x = x; h.y = y; h.phase = ph; } });
+    if (this.stars && s.sr) for (let i = 0; i < this.stars.length; i++) this.stars[i].taken = s.sr.charCodeAt(i) === 49;
     this.effects = s.e.map(([t, x, y, tt, max, r, kart]) => ({ type: FX_TYPES[t], x, y, t: tt, max, r, kart }));
   }
 
@@ -59,9 +63,9 @@ export class MirrorSim {
     k.rouletteT = h.item === '?' ? 1 : 0;
     k.item = h.item && h.item !== '?' ? h.item : null;
     k.power = h.power || 0; k.charges = h.charges || 0;
-    k.gear = h.gear || 1; k.rpm = h.rpm || 0; k.lug = !!h.lug; k.manual = !!h.manual;
     k.message = h.msg || ''; k.messageT = h.msg ? 1 : 0;
     k.flashT = h.fl || 0; k.v = h.v || 0;
+    this.objectiveText = h.obj || '';
   }
 
   advance(dt) {
@@ -141,9 +145,11 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
 export function raceInitMsg(sim, trackIndex) {
   return {
     t: 'raceinit', track: trackIndex, mode: sim.mode, laps: sim.laps,
-    karts: sim.karts.map((k) => [k.char, k.human ? 1 : 0, k.slot, k.manual ? 1 : 0]),
+    karts: sim.karts.map((k) => [k.char, k.human ? 1 : 0, k.slot, k.boss || 0]),
     boxes: sim.boxes.map((b) => [r1(b.x), r1(b.y)]),
     hazards: sim.hazards.map((h) => [h.type, h.period || 0]),
+    stars: sim.stars ? sim.stars.map((s) => [r1(s.x), r1(s.y)]) : null,
+    story: sim.story ? { type: sim.story.type, obj: sim.story.obj } : null,
   };
 }
 
@@ -171,6 +177,7 @@ export function snapshotMsg(sim, sfx) {
     d: sim.puddles.map((p) => [p.type === 'oil' ? 0 : 1, r1(p.x), r1(p.y), p.r]),
     h: sim.hazards.map((h) => [r1(h.x), r1(h.y), r3(h.phase || 0)]),
     e: sim.effects.map((e) => [FX_TYPES.indexOf(e.type), r1(e.x), r1(e.y), r3(e.t), e.max, e.r || 0, e.kart === undefined ? -1 : e.kart]),
+    sr: sim.stars ? sim.stars.map((x) => (x.taken ? '1' : '0')).join('') : '',
     s: sfx,
   };
 }

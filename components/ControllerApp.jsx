@@ -15,10 +15,18 @@ function getPid() {
   } catch (e) { return Math.random().toString(36).slice(2); }
 }
 function loadCtrl() {
-  try { const c = JSON.parse(localStorage.getItem('sl_ctrl') || 'null'); if (c) return { mode: 'tilt', invert: false, sens: 1, autoAcc: false, view: false, sound: true, ...c }; } catch (e) { /* nada */ }
-  return { mode: 'tilt', invert: false, sens: 1, autoAcc: false, view: false, sound: true };
+  const def = { mode: 'buttons', invert: false, sens: 1, view: false, sound: true };
+  try { const c = JSON.parse(localStorage.getItem('sl_ctrl2') || 'null'); if (c) return { ...def, ...c }; } catch (e) { /* nada */ }
+  return def;
 }
-function saveCtrl(c) { try { localStorage.setItem('sl_ctrl', JSON.stringify(c)); } catch (e) { /* nada */ } }
+function saveCtrl(c) { try { localStorage.setItem('sl_ctrl2', JSON.stringify(c)); } catch (e) { /* nada */ } }
+async function goFullscreen() {
+  try {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+    if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape').catch(() => {});
+  } catch (e) { /* nada */ }
+}
 
 export default function ControllerApp() {
   const [code, setCode] = useState(null);
@@ -35,11 +43,12 @@ export default function ControllerApp() {
   const [portrait, setPortrait] = useState(true);
   const [art, setArt] = useState({ p: {}, i: {} });
   const [raceKey, setRaceKey] = useState(0);
+  const [cine, setCine] = useState(null);
 
   const connRef = useRef(null);
   const phaseRef = useRef('lobby');
   const ctrlRef = useRef(ctrl);
-  const inp = useRef({ steer: 0, acc: false, brake: false, drift: false, left: false, right: false, ic: 0, pc: 0, gu: 0, gd: 0 });
+  const inp = useRef({ steer: 0, brake: false, drift: false, left: false, right: false, ic: 0, pc: 0 });
   const tilt = useRef({ theta: 0, theta0: 0, got: false, smooth: 0, lastAng: null });
   const wheelRef = useRef(null);
   const barRef = useRef(null);
@@ -84,7 +93,8 @@ export default function ControllerApp() {
       switch (m.t) {
         case 'welcome': setSlot(m.slot); break;
         case 'lobby': setLobby(m); setSlot(m.you); if (m.phase) { setPhase(m.phase); } break;
-        case 'phase': setPhase(m.phase); setPinfo(m); setPaused(false); if (m.phase !== 'race') setHud(null); break;
+        case 'phase': setPhase(m.phase); setPinfo(m); setPaused(false); if (m.phase !== 'race') setHud(null); if (m.cine) setCine(m.cine); break;
+        case 'cine': setCine(m); break;
         case 'hud':
           setHud(m);
           if (mirrorRef.current) mirrorRef.current.applyHud(slotRef.current, m);
@@ -149,8 +159,7 @@ export default function ControllerApp() {
       if (phaseRef.current !== 'race') return;
       const i = inp.current, c = ctrlRef.current;
       let steer = c.mode === 'tilt' && tilt.current.got ? tilt.current.smooth : (i.right ? 1 : 0) - (i.left ? 1 : 0);
-      const acc = c.autoAcc ? !i.brake : i.acc;
-      send({ t: 'in', s: Math.round(steer * 100) / 100, a: acc, b: i.brake, d: i.drift, ic: i.ic, pc: i.pc, gu: i.gu, gd: i.gd });
+      send({ t: 'in', s: Math.round(steer * 100) / 100, b: i.brake, d: i.drift, ic: i.ic, pc: i.pc });
     }, 33);
     return () => clearInterval(id);
   }, []);
@@ -208,11 +217,7 @@ export default function ControllerApp() {
     setCtrl((c) => ({ ...c, mode: 'tilt' }));
     setTimeout(() => { if (!tilt.current.got) { setSensor('none'); setCtrl((c) => ({ ...c, mode: 'buttons' })); } }, 1500);
     // 2) pantalla completa, horizontal y que no se apague (si el navegador deja)
-    try {
-      const el = document.documentElement;
-      if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
-      if (screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape').catch(() => {});
-    } catch (e) { /* nada */ }
+    await goFullscreen();
     try { if ('wakeLock' in navigator && !wakeRef.current) wakeRef.current = await navigator.wakeLock.request('screen'); } catch (e) { /* nada */ }
   };
   const center = () => { tilt.current.theta0 = tilt.current.theta; tilt.current.smooth = 0; if (navigator.vibrate) navigator.vibrate(20); };
@@ -251,11 +256,22 @@ export default function ControllerApp() {
   const isHost = lobby ? lobby.host : false;
   const lost = status !== 'online';
 
+  const useArrows = async () => {
+    setCtrl((c) => ({ ...c, mode: 'buttons' }));
+    if (ctrlRef.current.view && ctrlRef.current.sound) getAudio().init();
+    await goFullscreen();
+    try { if ('wakeLock' in navigator && !wakeRef.current) wakeRef.current = await navigator.wakeLock.request('screen'); } catch (e) { /* nada */ }
+  };
   const sensorCard = (
     <div className="m-card">
-      <div className="m-h">Volante</div>
-      {sensor !== 'on' && ctrl.mode === 'tilt' && <button className="m-btn gold wide" onClick={activateSensor}>Activar volante</button>}
-      {sensor === 'none' && <p className="m-small warn">Tu celular no envió datos del sensor. Se usarán botones para girar.</p>}
+      <div className="m-h">Cómo girar</div>
+      <p className="m-small">El carro acelera solo. Tú giras, derrapas, usas objetos y frenas si hace falta.</p>
+      <div className="m-seg">
+        <button className={ctrl.mode === 'buttons' ? 'on' : ''} onClick={useArrows}>Flechas ◀ ▶</button>
+        <button className={ctrl.mode === 'tilt' ? 'on' : ''} onClick={activateSensor}>Inclinar el celular</button>
+      </div>
+      {sensor === 'none' && <p className="m-small warn">Tu celular no envió datos del sensor. Se usarán las flechas.</p>}
+      {ctrl.mode === 'tilt' && sensor !== 'on' && sensor !== 'none' && <button className="m-btn gold wide" onClick={activateSensor}>Activar volante</button>}
       {sensor === 'on' && ctrl.mode === 'tilt' && (
         <>
           <p className="m-small">Sostén el celular horizontal como un volante y gíralo: la barra debe moverse. Si al soltarlo la barra no queda en el centro, toca «Centrar».</p>
@@ -264,13 +280,9 @@ export default function ControllerApp() {
             <button className="m-btn" onClick={center}>Centrar</button>
             <button className={'m-btn' + (ctrl.invert ? ' on' : '')} onClick={() => setCtrl((c) => ({ ...c, invert: !c.invert }))}>Invertir</button>
           </div>
-          <div className="m-seg">{SENS.map((s) => <button key={s.id} className={ctrl.sens === s.id ? 'on' : ''} onClick={() => setCtrl((c) => ({ ...c, sens: s.id }))}>{s.name}</button>)}</div>
+          <div className="m-seg">{SENS.map((x) => <button key={x.id} className={ctrl.sens === x.id ? 'on' : ''} onClick={() => setCtrl((c) => ({ ...c, sens: x.id }))}>{x.name}</button>)}</div>
         </>
       )}
-      <div className="m-row">
-        <button className={'m-btn' + (ctrl.mode === 'buttons' ? ' on' : '')} onClick={() => setCtrl((c) => ({ ...c, mode: c.mode === 'buttons' ? 'tilt' : 'buttons' }))}>{ctrl.mode === 'buttons' ? 'Usando botones ◀ ▶' : 'Girar con botones'}</button>
-        <button className={'m-btn' + (ctrl.autoAcc ? ' on' : '')} onClick={() => setCtrl((c) => ({ ...c, autoAcc: !c.autoAcc }))}>{ctrl.autoAcc ? 'Acelera solo ✓' : 'Acelerar solo'}</button>
-      </div>
     </div>
   );
 
@@ -285,6 +297,51 @@ export default function ControllerApp() {
         raceKey={raceKey} raceInitRef={raceInitRef} mirrorRef={mirrorRef}
         onToggleView={() => setCtrl((c) => ({ ...c, view: !c.view }))}
       />
+    );
+  }
+
+  if (phase === 'cinematic') {
+    const c = cine || {};
+    const line = c.line;
+    return (
+      <div className="m-screen m-cine" style={{ '--c': color }} onClick={() => send({ t: 'cnext' })}>
+        {c.title && <div className="m-cine-title"><b>{c.title}</b>{c.sub && <span>{c.sub}</span>}</div>}
+        {line ? (
+          <div className={'m-cine-box' + (line.char === 'baron' || line.shadow ? ' villain' : '')}>
+            <div className="m-cine-face">{line.char ? <img className={line.shadow ? 'shadow' : ''} src={art.p[line.char]} alt="" /> : <span>★</span>}</div>
+            <div className="m-cine-name">{line.name}</div>
+            <p className="m-cine-text">{line.text}</p>
+          </div>
+        ) : (!c.title && <div className="m-spin" />)}
+        <div className="m-row m-cine-btns">
+          <button className="m-btn gold" onClick={(e) => { e.stopPropagation(); send({ t: 'cnext' }); }}>Siguiente ▶</button>
+          {isHost && <button className="m-btn" onClick={(e) => { e.stopPropagation(); send({ t: 'cskip' }); }}>Saltar ⏭</button>}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === 'storyresult' || phase === 'storyend') {
+    const st = pinfo.story || {};
+    const win = phase === 'storyend' || st.result === 'win';
+    return (
+      <div className="m-screen m-center" style={{ '--c': color }}>
+        <div className="m-tag">{SLOT_NAMES[slot]}</div>
+        <div className="m-big">{phase === 'storyend' ? '★' : win ? '✓' : '✗'}</div>
+        <h2>{phase === 'storyend' ? '¡La Estrella Madre volvió a brillar!' : win ? '¡Nivel superado!' : 'No lo lograron'}</h2>
+        {phase === 'storyresult' && <p>Nivel {st.n} de {st.total}: {st.title}<br />{st.obj}</p>}
+        {isHost ? (
+          phase === 'storyend' ? <button className="m-btn gold wide" onClick={() => send({ t: 'next' })}>Volver al lobby</button> : win ? (
+            <button className="m-btn gold wide" onClick={() => send({ t: 'next' })}>Continuar</button>
+          ) : (
+            <>
+              <button className="m-btn gold wide" onClick={() => send({ t: 'next' })}>Reintentar</button>
+              <button className="m-btn wide" onClick={() => send({ t: 'skiplevel' })}>Saltar este nivel</button>
+            </>
+          )
+        ) : <p className="m-small">Esperando a que J1 continúe…</p>}
+        {isHost && phase === 'storyresult' && <button className="m-btn wide" onClick={() => send({ t: 'quit' })}>Salir de la historia</button>}
+      </div>
     );
   }
 
@@ -348,12 +405,6 @@ export default function ControllerApp() {
               </div>
             </div>
           )}
-          <div className="m-h">Caja de cambios</div>
-          <div className="m-seg">
-            <button className={!me.manual ? 'on' : ''} onClick={() => send({ t: 'pick', manual: false })}>Automática</button>
-            <button className={me.manual ? 'on' : ''} onClick={() => send({ t: 'pick', manual: true })}>Manual</button>
-          </div>
-          <p className="m-small">{me.manual ? 'Tú cambias con ▲ ▼. Si cambias en la zona verde ganas un mini turbo y la velocidad máxima es un poco mayor.' : 'El carro cambia solo.'}</p>
         </div>
       )}
       {sensorCard}
@@ -372,6 +423,14 @@ export default function ControllerApp() {
         <div className="m-card">
           <div className="m-h">Partida (eres el anfitrión)</div>
           <div className="m-seg col">{MODES.map((m) => <button key={m.id} className={lobby.cfg.mode === m.id ? 'on' : ''} onClick={() => send({ t: 'cfg', cfg: { mode: m.id } })}>{m.name}</button>)}</div>
+          {lobby.cfg.mode === 'historia' && lobby.levels && (
+            <>
+              <div className="m-small">Empezar en:</div>
+              <select className="m-sel" value={lobby.cfg.level || 0} onChange={(e) => send({ t: 'cfg', cfg: { level: Number(e.target.value) } })}>
+                {lobby.levels.map((l, i) => <option key={l} value={i}>{l}</option>)}
+              </select>
+            </>
+          )}
           {lobby.cfg.mode === 'rapida' && <div className="m-seg col">{TRACK_NAMES.map((t, i) => <button key={t} className={lobby.cfg.track === i ? 'on' : ''} onClick={() => send({ t: 'cfg', cfg: { track: i } })}>{t}</button>)}</div>}
           <div className="m-seg">{DIFFICULTIES.map((d) => <button key={d.id} className={lobby.cfg.diff === d.id ? 'on' : ''} onClick={() => send({ t: 'cfg', cfg: { diff: d.id } })}>{d.name}</button>)}</div>
           <button className="m-btn gold wide big" onClick={() => send({ t: 'start' })}>¡Empezar!</button>
@@ -416,7 +475,7 @@ function PadBtn({ label, cls, onDown, onUp, children }) {
   );
 }
 
-function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, inset }) {
+function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22, insetR = 0.22 }) {
   const canvasRef = useRef(null);
   const pausedRef = useRef(paused);
   const [state, setState] = useState('loading');
@@ -443,7 +502,7 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, inset }) {
           const H = 270, W = Math.round((H * aspect) / 2) * 2;
           renderer = new Renderer(cv, W, H);
           renderer.setTrack(track);
-          renderer.inset = Math.round(W * inset);
+          renderer.inset = [Math.round(W * insetL), Math.round(W * insetR)];
         };
         make();
         onResize = () => setTimeout(make, 120);
@@ -478,30 +537,16 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, inset }) {
 function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art, paused, lost, isHost, onPause, onQuit, sensorOn, activateSensor, raceKey, raceInitRef, mirrorRef, onToggleView }) {
   const set = (k, v) => () => { inp.current[k] = v; };
   const inc = (k) => () => { inp.current[k]++; };
-  useEffect(() => () => { const i = inp.current; i.acc = i.brake = i.drift = i.left = i.right = false; }, [inp]);
+  useEffect(() => () => { const i = inp.current; i.brake = i.drift = i.left = i.right = false; }, [inp]);
   const h = hud || {};
   const battle = h.mode === 'battle';
   const tilt = ctrl.mode === 'tilt';
   const view = !!ctrl.view;
-  const leftCol = (
-    <div className="pad-col left">
-      {h.manual && (
-        <div className="gears">
-          <PadBtn cls="gear up" onDown={inc('gu')}>▲</PadBtn>
-          <PadBtn cls="gear down" onDown={inc('gd')}>▼</PadBtn>
-        </div>
-      )}
-      <PadBtn cls={'drift' + (h.drift === 2 ? ' lv2' : h.drift === 1 ? ' lv1' : '')} onDown={set('drift', true)} onUp={set('drift', false)}>DERRAPE</PadBtn>
-      <PadBtn cls="brake" onDown={set('brake', true)} onUp={set('brake', false)}>FRENO</PadBtn>
-    </div>
-  );
-  const rightCol = (
-    <div className="pad-col right">
-      <PadBtn cls="item" onDown={inc('ic')}>OBJETO</PadBtn>
-      <PadBtn cls={'power' + (h.power >= 1 || h.charges > 0 ? ' ready' : '')} onDown={inc('pc')}>PODER</PadBtn>
-      {ctrl.autoAcc ? <div className="pad-btn acc auto">AUTO</div> : <PadBtn cls="acc" onDown={set('acc', true)} onUp={set('acc', false)}>ACELERAR</PadBtn>}
-    </div>
-  );
+  const driftCls = 'drift' + (h.drift === 2 ? ' lv2' : h.drift === 1 ? ' lv1' : '');
+  const driftBtn = <PadBtn cls={driftCls} onDown={set('drift', true)} onUp={set('drift', false)}>DERRAPE</PadBtn>;
+  const itemBtn = <PadBtn cls="item" onDown={inc('ic')}>OBJETO</PadBtn>;
+  const powerBtn = <PadBtn cls={'power' + (h.power >= 1 || h.charges > 0 ? ' ready' : '')} onDown={inc('pc')}>PODER</PadBtn>;
+  const brakeBtn = <PadBtn cls="brake" onDown={set('brake', true)} onUp={set('brake', false)}>FRENO</PadBtn>;
   const steerBtns = (
     <div className="steer-btns">
       <PadBtn cls="steer" onDown={set('left', true)} onUp={set('left', false)}>◀</PadBtn>
@@ -521,29 +566,40 @@ function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art,
     </>
   );
 
+  // ----- vista de juego en el celular: botones a la izquierda, flechas a la derecha -----
   if (view) {
     return (
-      <div className="pad view" style={{ '--c': color }}>
-        <GameView raceKey={raceKey} raceInitRef={raceInitRef} mirrorRef={mirrorRef} slot={slot} paused={paused} inset={0.22} />
-        {leftCol}
+      <div className={'pad view' + (tilt ? ' tilt' : '')} style={{ '--c': color }}>
+        <GameView raceKey={raceKey} raceInitRef={raceInitRef} mirrorRef={mirrorRef} slot={slot} paused={paused} insetL={0.24} insetR={0.3} />
+        <div className="pad-col left">
+          {!tilt && <div className="pad-col-big">{driftBtn}</div>}
+          {itemBtn}
+          {powerBtn}
+          {brakeBtn}
+        </div>
         <div className="pad-mid">
           {tilt && !sensorOn && <button className="m-btn gold view-act" onClick={activateSensor}>Activar volante</button>}
-          {!tilt && <div className="view-steer">{steerBtns}</div>}
           <div className="view-top">
             {tilt && sensorOn && <button className="view-btn" onClick={center} title="Centrar volante">◎</button>}
             <button className="view-btn" onClick={onToggleView} title="Ocultar el juego">🎮</button>
             <button className="view-btn" onClick={onPause} title="Pausa">II</button>
           </div>
         </div>
-        {rightCol}
+        <div className="pad-col right">
+          {tilt ? driftBtn : steerBtns}
+        </div>
         {overlays}
       </div>
     );
   }
 
+  // ----- solo mando -----
   return (
     <div className="pad" style={{ '--c': color }}>
-      {leftCol}
+      <div className="pad-col left">
+        <div className="pad-col-big">{driftBtn}</div>
+        {brakeBtn}
+      </div>
       <div className="pad-mid">
         <div className="pad-top">
           <div className="pad-tag">{SLOT_NAMES[slot]}</div>
@@ -564,12 +620,7 @@ function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art,
             <span>{h.charges > 0 ? `TURBO x${h.charges}` : h.power >= 1 ? '¡PODER LISTO!' : 'Poder'}</span>
           </div>
         </div>
-        {h.manual && (
-          <div className="pad-gear">
-            <span className={h.lug ? 'lug' : ''}>M{h.gear}</span>
-            <div className="rpm"><div className={'rpm-fill' + (h.rpm > 0.82 ? ' hot' : '')} style={{ width: `${(h.rpm || 0) * 100}%` }} /><i /></div>
-          </div>
-        )}
+        {h.obj && <div className="pad-obj">{h.obj}</div>}
         {tilt ? (
           <div className="wheel-wrap" onClick={center}>
             <div className="wheel" ref={wheelRef}><div className="wheel-ring" /><div className="wheel-bar" /><div className="wheel-top" /></div>
@@ -581,7 +632,10 @@ function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art,
         {h.started === false && h.count > 0 && <div className="pad-count">{h.count > 3 ? '¡Prepárate!' : h.count}</div>}
         {h.elim && <div className="pad-msg">Eliminado</div>}
       </div>
-      {rightCol}
+      <div className="pad-col right">
+        {itemBtn}
+        {powerBtn}
+      </div>
       {overlays}
     </div>
   );

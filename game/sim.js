@@ -7,12 +7,13 @@ const GRAV = 720;
 const GEAR_ENDS = [0.24, 0.42, 0.61, 0.8, 1.0];
 
 function emptyInput() {
-  return { steer: 0, acc: false, brake: false, drift: false, item: false, power: false, gearUp: false, gearDown: false };
+  return { steer: 0, acc: false, brake: false, drift: false, item: false, power: false };
 }
 
 export class Sim {
-  constructor({ track, mode, humans, difficulty = 1, kartsTotal = 8, laps = LAPS, botChars = null, demo = false }) {
+  constructor({ track, mode, humans, difficulty = 1, kartsTotal = 8, laps = LAPS, botChars = null, demo = false, story = null }) {
     this.demo = demo;
+    this.story = story; // { type, boss, goal, hits, time, target }
     this.track = track; // objeto de trackgfx (geometría + gráficos)
     this.mode = mode; // 'race' | 'battle'
     this.arena = !!track.arena;
@@ -37,30 +38,48 @@ export class Sim {
     // karts
     const used = new Set(humans.map((h) => h.char));
     const free = CHARACTERS.map((c) => c.id).filter((id) => !used.has(id));
-    const shuffled = botChars ? botChars.filter((id) => !used.has(id)) : free.sort(() => Math.random() - 0.5);
+    let shuffled = botChars ? botChars.filter((id) => !used.has(id)) : free.sort(() => Math.random() - 0.5);
     if (!shuffled.length) shuffled.push(...free);
+    if (story && story.boss) shuffled = [story.boss, ...shuffled.filter((id) => id !== story.boss)];
     const total = Math.max(kartsTotal, humans.length);
     const bots = [];
     for (let i = 0; i < total - humans.length; i++) bots.push(shuffled[i % shuffled.length]);
     this.karts = [];
-    bots.forEach((c) => this.karts.push(this.makeKart(c, false, -1, false)));
-    humans.forEach((h) => this.karts.push(this.makeKart(h.char, true, h.slot, h.manual)));
+    bots.forEach((c, i) => {
+      const k = this.makeKart(c, false, -1);
+      if (story && story.boss && i === 0) {
+        k.boss = c === 'baron' ? 2 : 1;
+        k.speedMul = [0.93, 0.98, 1.03][difficulty] || 0.98;
+        if (story.type === 'chase') k.speedMul = [0.9, 0.94, 0.98][difficulty] || 0.94;
+      }
+      this.karts.push(k);
+    });
+    humans.forEach((h) => this.karts.push(this.makeKart(h.char, true, h.slot)));
+    // en la historia los jugadores salen adelante, justo detrás del jefe
+    if (story) {
+      const boss = this.karts.filter((k) => k.boss);
+      const hs = this.karts.filter((k) => k.human);
+      const rest = this.karts.filter((k) => !k.boss && !k.human);
+      this.karts = [...boss, ...hs, ...rest];
+      this.karts.forEach((k, i) => { k.id = i; });
+    }
 
     if (this.arena) this.placeArena(); else this.placeGrid();
     this.setupTrackObjects();
+    this.setupStory();
     this.rank();
   }
 
-  makeKart(charId, human, slot, manual) {
+  makeKart(charId, human, slot) {
     const ch = charById(charId);
     const s = ch.stats;
     const k = {
       id: this.karts ? this.karts.length : 0,
-      ch, char: ch.id, human, slot, manual: !!manual,
+      ch, char: ch.id, human, slot,
       maxV: 232 + s.speed * 10, accel: 105 + s.accel * 26, turn: 1.72 + s.handling * 0.15, weight: 0.7 + s.weight * 0.25,
       x: 0, y: 0, a: 0, v: 0, vx: 0, vy: 0, z: 0, vz: 0,
       idx: 0, lat: 0, lap: 0, half: true, finished: false, finishTime: 0, place: 1, progress: 0,
-      gear: 1, rpm: 0, lug: false,
+      gear: 1, driftLock: false,
       drift: 0, driftT: 0, driftLevel: 0,
       boostT: 0, spinT: 0, spinVis: 0, frozenT: 0, stickyT: 0, blindT: 0, shieldT: 0, invulnT: 0, flashT: 0,
       fallT: 0, lastSafe: 0, surface: 'road',
@@ -152,6 +171,7 @@ export class Sim {
     }
     this.kartCollisions();
     this.updateBoxes(dt);
+    if (this.stars) this.updateStars();
     this.updateHazards(dt);
     this.updateProjectiles(dt);
     this.updatePuddles(dt);
@@ -190,7 +210,8 @@ export class Sim {
 
     // poder: carga
     if (!k.finished) {
-      const rate = this.mode === 'battle' ? 1 / 14 : (1 / 20) * (1 + 0.12 * (k.place - 1));
+      let rate = this.mode === 'battle' ? 1 / 14 : (1 / 20) * (1 + 0.12 * (k.place - 1));
+      if (k.boss) rate *= 1.6;
       if (k.power < 1) { k.power = Math.min(1, k.power + rate * dt); if (k.power >= 1) { this.buzz(k, 60); if (k.human) this.sfx('ready'); } }
     }
 
@@ -200,26 +221,11 @@ export class Sim {
       if (inp.power) this.usePower(k);
     }
 
-    // caja de cambios (si el kart va en piloto automático, cambia solo)
-    const manual = k.manual && !k.autopilot && !k.finished;
-    const topV = k.maxV * (manual ? 1.04 : 1);
-    if (manual) {
-      if (inp.gearUp && k.gear < 5) {
-        const perfect = k.rpm >= 0.82 && k.v > 20;
-        k.gear++;
-        if (perfect) { k.boostT = Math.max(k.boostT, 0.35); this.say(k, '¡CAMBIO PERFECTO!', 0.8); this.sfx('perfect'); }
-        else this.sfx('shift');
-      }
-      if (inp.gearDown && k.gear > 1) { k.gear--; this.sfx('shift'); }
-    } else {
-      let g = 1;
-      while (g < 5 && k.v > GEAR_ENDS[g - 1] * topV * 0.97) g++;
-      k.gear = g;
-    }
-    const lo = k.gear > 1 ? GEAR_ENDS[k.gear - 2] * topV : 0;
-    const hi = GEAR_ENDS[k.gear - 1] * topV;
-    k.rpm = Math.max(0, Math.min(1, (Math.abs(k.v) - lo) / (hi - lo)));
-    k.lug = manual && k.v < lo * 0.85;
+    // caja siempre automática
+    const topV = k.maxV;
+    let gearN = 1;
+    while (gearN < 5 && k.v > GEAR_ENDS[gearN - 1] * topV * 0.97) gearN++;
+    k.gear = gearN;
 
     // superficie
     let maxV = topV;
@@ -231,12 +237,8 @@ export class Sim {
     else if (surf === 'ice') { grip = 1.7; }
     if (k.stickyT > 0) maxV *= 0.55;
     if (k.blindT > 0 && !k.human) maxV *= 0.85;
-    if (!k.human && !k.finished) maxV *= this.botSpeedMul(k);
+    if (!k.human && !k.finished) maxV *= k.boss ? this.bossMul(k) : this.botSpeedMul(k);
     if (k.finished && k.human) maxV *= 0.8;
-    if (manual) {
-      if (k.boostT <= 0) maxV = Math.min(maxV, hi);
-      if (k.lug) accel *= 0.3;
-    }
     if (k.boostT > 0) { maxV = Math.max(maxV, topV * 1.34); accel *= 3; }
 
     // aceleración
@@ -247,7 +249,9 @@ export class Sim {
       if (k.spinT <= 0) k.spinVis = 0;
     } else {
       const air = k.z > 0.5;
-      if (inp.acc && !inp.brake) {
+      // los jugadores aceleran solos; solo frenan
+      const accOn = k.human ? !inp.brake : inp.acc;
+      if (accOn && !inp.brake) {
         if (k.v < maxV) k.v = Math.min(maxV, k.v + accel * Math.max(0.22, 1 - k.v / (maxV * 1.12)) * dt * (air ? 0.4 : 1));
         else k.v -= (k.v - maxV) * 2.2 * dt;
       } else if (inp.brake) {
@@ -261,11 +265,14 @@ export class Sim {
 
       // derrape
       const steer = Math.max(-1, Math.min(1, inp.steer));
-      if (inp.drift && !k.prevDrift && k.drift === 0 && !air && Math.abs(steer) > 0.2 && k.v > 105) {
+      // derrape simplificado: mantén DERRAPE y gira; las chispas cargan solas
+      if (!inp.drift) k.driftLock = false;
+      if (inp.drift && !k.driftLock && k.drift === 0 && !air && Math.abs(steer) > 0.2 && k.v > 100) {
         k.drift = Math.sign(steer); k.driftT = 0; k.driftLevel = 0; k.vz = 75; this.sfx('hop');
       }
       if (k.drift !== 0) {
         if (!inp.drift || k.v < 75) {
+          if (inp.drift) k.driftLock = true;
           if (k.driftLevel >= 2) { k.boostT = Math.max(k.boostT, 1.05); this.sfx('boost'); this.say(k, '¡MINI TURBO!', 0.7); }
           else if (k.driftLevel === 1) { k.boostT = Math.max(k.boostT, 0.5); this.sfx('boost'); }
           k.drift = 0; k.driftT = 0; k.driftLevel = 0;
@@ -273,8 +280,8 @@ export class Sim {
           const into = steer * k.drift;
           const amt = k.drift * (0.5 + 0.5 * (into + 1) / 2);
           k.a += amt * k.turn * 1.18 * dt;
-          k.driftT += dt * (0.55 + 0.65 * Math.max(0, into));
-          const lvl = k.driftT > 1.55 ? 2 : k.driftT > 0.75 ? 1 : 0;
+          k.driftT += dt;
+          const lvl = k.driftT > 1.5 ? 2 : k.driftT > 0.7 ? 1 : 0;
           if (lvl > k.driftLevel) { k.driftLevel = lvl; this.sfx(lvl === 2 ? 'spark2' : 'spark1'); this.buzz(k, 25); }
           grip = Math.min(grip, 3.2);
           if (Math.random() < 0.6 && k.driftLevel > 0) this.spark(k, k.driftLevel === 2 ? '#ffa21e' : '#59c8ff');
@@ -422,6 +429,7 @@ export class Sim {
     k.finishTime = this.raceTime;
     this.finishOrder.push(k);
     k.place = this.finishOrder.length;
+    this.storyOnFinish(k);
     k.drift = 0;
     if (k.human) {
       this.sfx('finish');
@@ -554,6 +562,11 @@ export class Sim {
     else if (kind === 'shock') { k.spinT = 1.2; k.v *= 0.2; k.stickyT = 1.3; }
     k.invulnT = (k.spinT || 0) + (k.frozenT || 0) + 0.7;
     k.hits++;
+    if (this.story && this.story.type === 'chase' && k.boss && src && src.human && !this.storyState.result) {
+      this.storyState.hits++;
+      this.say(src, `¡ALCANCE ${this.storyState.hits}/${this.storyState.goal}!`, 1.2);
+      if (this.storyState.hits >= this.storyState.goal) this.storyWin();
+    }
     this.sfx('hit');
     this.buzz(k, 220);
     if (this.mode === 'battle') {
@@ -697,6 +710,11 @@ export class Sim {
           a.vx -= ux * imp * (b.weight / tw); a.vy -= uy * imp * (b.weight / tw);
           b.vx += ux * imp * (a.weight / tw); b.vy += uy * imp * (a.weight / tw);
           if (imp > 70) { this.sfx('bump'); this.buzz(a, 30); this.buzz(b, 30); }
+          // persecución: chocar al ladrón cuenta como alcance
+          if (this.story && this.story.type === 'chase' && imp > 25) {
+            if (a.boss && b.human) this.hit(a, 'spin', b);
+            else if (b.boss && a.human) this.hit(b, 'spin', a);
+          }
           // un kart con turbo y más pesado derriba en batalla
           if (this.mode === 'battle') {
             if (a.boostT > 0 && b.boostT <= 0 && imp > 120) this.hit(b, 'spin', a);
@@ -866,6 +884,10 @@ export class Sim {
 
   checkEnd(dt) {
     if (this.done || this.demo) return;
+    if (this.story) {
+      this.storyTick();
+      if (this.storyState.result && this.endTimer < 0) this.endTimer = 3;
+    }
     if (this.mode === 'battle') {
       const alive = this.karts.filter((k) => !k.eliminated);
       const humansAlive = alive.filter((k) => k.human);
@@ -878,7 +900,7 @@ export class Sim {
     } else {
       const humans = this.karts.filter((k) => k.human);
       if (this.endTimer < 0) {
-        if (humans.every((h) => h.finished)) this.endTimer = 3;
+        if (humans.every((h) => h.finished)) { this.endTimer = 3; if (this.story && !this.storyState.result) this.storyLose(); }
         else if (this.firstHumanFinish >= 0 && this.raceTime - this.firstHumanFinish > 45) this.endTimer = 0.5;
       }
     }
@@ -890,6 +912,7 @@ export class Sim {
 
   results() {
     this.rank();
+    if (this.story && !this.storyState.result) this.storyLose();
     const N = this.arena ? 1 : this.track.cl.N;
     let lastT = 0;
     return [...this.karts].sort((a, b) => a.place - b.place).map((k) => {
@@ -907,6 +930,119 @@ export class Sim {
     });
   }
 }
+
+// ---------------- modo historia ----------------
+Object.assign(Sim.prototype, {
+  setupStory() {
+    const st = this.story;
+    this.storyState = null;
+    this.objectiveText = '';
+    if (!st) return;
+    this.storyState = { result: null, collected: 0, goal: st.goal || st.hits || 0, hits: 0, timeLeft: st.time || 0 };
+    const boss = this.karts.find((k) => k.boss);
+    this.boss = boss || null;
+    if (st.type === 'chase' && boss) {
+      // el ladrón sale con ventaja
+      const cl = this.track.cl;
+      const s = sampleAtIdx(cl, (boss.idx + 22) % cl.N);
+      boss.x = s.x; boss.y = s.y; boss.a = Math.atan2(s.ty, s.tx); boss.camA = boss.a;
+      const loc = locate(cl, boss.x, boss.y, boss.idx + 22);
+      boss.idx = loc.idx; boss.lat = loc.d; boss.lastSafe = boss.idx;
+      if (boss.idx < cl.N * 0.5) { boss.lap = 1; boss.half = false; }
+    }
+    if (st.type === 'collect') {
+      const cl = this.track.cl, w = this.track.w;
+      this.stars = [];
+      const n = 18;
+      for (let i = 0; i < n; i++) {
+        const p = pointAt(cl, 0.04 + (i / n) * 0.95, [-0.5, 0, 0.5, 0.25, -0.25][i % 5] * w);
+        this.stars.push({ x: p.x, y: p.y, taken: false });
+      }
+    }
+    this.storyTick();
+  },
+
+  updateStars() {
+    for (const s of this.stars) {
+      if (s.taken) continue;
+      for (const k of this.karts) {
+        if (!k.human || k.fallT > 0) continue;
+        if (Math.abs(k.x - s.x) < 18 && Math.abs(k.y - s.y) < 18 && k.z < 30) {
+          s.taken = true;
+          this.storyState.collected++;
+          this.sfx('itemget');
+          this.buzz(k, 40);
+          for (let i = 0; i < 8; i++) this.part(s.x, s.y, 12, (Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120, 60 + Math.random() * 80, 0.5, '#ffd23f', 2);
+          if (this.storyState.collected >= this.storyState.goal && !this.storyState.result) this.storyWin();
+          break;
+        }
+      }
+    }
+  },
+
+  storyOnFinish(k) {
+    const st = this.story;
+    if (!st || this.storyState.result) return;
+    if (st.type === 'top') {
+      if (k.human && k.place <= st.target) this.storyWin();
+      else if (this.finishOrder.length >= st.target && !this.finishOrder.slice(0, st.target).some((o) => o.human)) this.storyLose();
+    } else if (st.type === 'boss') {
+      if (k.human) this.storyWin();
+      else if (k.boss) this.storyLose();
+    } else if (st.type === 'chase') {
+      if (k.boss) this.storyLose();
+    } else if (st.type === 'time') {
+      if (k.human) this.storyWin();
+    }
+  },
+
+  storyTick() {
+    const st = this.story, ss = this.storyState;
+    if (st.type === 'time') {
+      ss.timeLeft = Math.max(0, st.time - this.raceTime);
+      if (ss.timeLeft <= 0 && !ss.result && this.started) this.storyLose();
+    }
+    let txt = '';
+    if (st.type === 'top') txt = `OBJETIVO: TOP ${st.target}`;
+    else if (st.type === 'boss') txt = this.boss ? `JEFE: ${this.boss.place}º` : '';
+    else if (st.type === 'collect') txt = `★ ${ss.collected}/${ss.goal}`;
+    else if (st.type === 'chase') txt = `ALCANCES ${ss.hits}/${ss.goal}`;
+    else if (st.type === 'time') txt = `TIEMPO ${Math.floor(ss.timeLeft / 60)}:${String(Math.floor(ss.timeLeft % 60)).padStart(2, '0')}`;
+    this.objectiveText = txt;
+  },
+
+  storyWin() {
+    if (this.storyState.result) return;
+    this.storyState.result = 'win';
+    for (const k of this.karts) if (k.human) this.say(k, '¡OBJETIVO CUMPLIDO!', 99);
+    this.sfx('finish');
+  },
+
+  storyLose() {
+    if (this.storyState.result) return;
+    this.storyState.result = 'lose';
+    for (const k of this.karts) if (k.human) this.say(k, 'OBJETIVO FALLIDO', 99);
+    this.sfx('elim');
+  },
+
+  bossMul(k) {
+    const m = k.speedMul || 1;
+    const humans = this.karts.filter((o) => o.human);
+    if (!humans.length || this.mode !== 'race') return m;
+    const N = this.track.cl.N;
+    const best = Math.max(...humans.map((h) => h.progress));
+    const diff = k.progress - best;
+    if (this.story && this.story.type === 'chase') {
+      // el ladrón se mantiene justo adelante: ni se escapa ni se deja
+      if (diff > N * 0.1) return m * 0.9;
+      if (diff < N * 0.01) return m * 1.08;
+      return m;
+    }
+    if (diff > N * 0.12) return m * 0.92;
+    if (diff < -N * 0.1) return m * 1.06;
+    return m;
+  },
+});
 
 function inRange(idx, i0, i1, N) {
   let a = ((i0 % N) + N) % N, b = ((i1 % N) + N) % N;

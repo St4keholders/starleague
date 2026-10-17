@@ -3,7 +3,9 @@ import { CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, CUP_POI
 import { Sim } from './sim.js';
 import { Renderer } from './render.js';
 import { buildTrack, THEMES } from './trackgfx.js';
-import { Audio, MENU_SONG } from './audio.js';
+import { Audio, MENU_SONG, STORY_SONG, VILLAIN_SONG } from './audio.js';
+import { STORY_LEVELS, TIME_LIMITS } from './story.js';
+import { Cinema } from './cinema.js';
 import { peerOptionsFromURL, peerParamsString } from './peeropts.js';
 import { raceInitMsg, snapshotMsg } from './mirror.js';
 
@@ -13,8 +15,9 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const STEP = 1 / 60;
 
 const KB = {
-  kbA: { left: ['KeyA'], right: ['KeyD'], acc: ['KeyW'], brake: ['KeyS'], drift: ['Space'], item: ['KeyQ'], power: ['KeyE'], gearUp: ['KeyR'], gearDown: ['KeyF'] },
-  kbB: { left: ['ArrowLeft'], right: ['ArrowRight'], acc: ['ArrowUp'], brake: ['ArrowDown'], drift: ['ShiftRight', 'Numpad0'], item: ['Slash', 'Numpad1', 'Minus'], power: ['Period', 'Numpad2'], gearUp: ['PageUp', 'NumpadAdd'], gearDown: ['PageDown', 'NumpadSubtract'] },
+  // el carro acelera solo: "join" solo sirve para unirse en el lobby
+  kbA: { left: ['KeyA'], right: ['KeyD'], join: ['KeyW'], brake: ['KeyS'], drift: ['Space'], item: ['KeyQ'], power: ['KeyE'] },
+  kbB: { left: ['ArrowLeft'], right: ['ArrowRight'], join: ['ArrowUp'], brake: ['ArrowDown'], drift: ['ShiftRight', 'Numpad0'], item: ['Slash', 'Numpad1', 'Minus'], power: ['Period', 'Numpad2'] },
 };
 
 function randCode() {
@@ -24,8 +27,8 @@ function randCode() {
 }
 
 function loadCfg() {
-  try { const c = JSON.parse(localStorage.getItem('sl_cfg') || 'null'); if (c && typeof c === 'object') return { mode: 'copa', track: 0, diff: 1, ...c }; } catch (e) { /* sin almacenamiento */ }
-  return { mode: 'copa', track: 0, diff: 1 };
+  try { const c = JSON.parse(localStorage.getItem('sl_cfg') || 'null'); if (c && typeof c === 'object') return { mode: 'copa', track: 0, diff: 1, level: 0, ...c }; } catch (e) { /* sin almacenamiento */ }
+  return { mode: 'copa', track: 0, diff: 1, level: 0 };
 }
 
 export class GameHost {
@@ -80,10 +83,12 @@ export class GameHost {
   snapshot() {
     return {
       phase: this.phase, code: this.code, peerStatus: this.peerStatus, peerError: this.peerError,
-      players: this.players.map((p) => p && { slot: p.slot, kind: p.kind, char: p.char, manual: p.manual, connected: p.connected }),
+      players: this.players.map((p) => p && { slot: p.slot, kind: p.kind, char: p.char, connected: p.connected }),
       cfg: { ...this.cfg }, cup: this.cup && { current: this.cup.current, total: this.cup.races.length, points: { ...this.cup.points } },
       results: this.results, paused: this.paused, muted: this.audio.muted,
       raceName: this.sim ? this.sim.track.def.name : '',
+      cine: this.cinema ? this.cinema.state() : null,
+      story: this.storyInfo(),
       mode: this.sim ? this.sim.mode : null,
     };
   }
@@ -157,9 +162,10 @@ export class GameHost {
   lobbyMsg(slot) {
     return {
       t: 'lobby', you: slot, host: this.hostSlot() === slot, phase: this.phase,
-      players: this.players.map((p) => p && { kind: p.kind, char: p.char, manual: p.manual, connected: p.connected }),
+      players: this.players.map((p) => p && { kind: p.kind, char: p.char, connected: p.connected }),
       cfg: this.cfg,
       tracks: TRACK_NAMES,
+      levels: STORY_LEVELS.map((l) => `${l.n}. ${l.title}`),
     };
   }
   broadcastLobby() { this.broadcast((i) => this.lobbyMsg(i)); }
@@ -176,7 +182,7 @@ export class GameHost {
       if (slot < 0) {
         slot = this.players.findIndex((p) => !p);
         if (slot < 0) { try { conn.send({ t: 'full' }); } catch (e) { /* nada */ } return; }
-        this.players[slot] = { slot, kind: 'phone', pid: msg.pid, char: this.freeChar(), manual: false, connected: true, conn, late: this.phase !== 'lobby' };
+        this.players[slot] = { slot, kind: 'phone', pid: msg.pid, char: this.freeChar(), connected: true, conn, late: this.phase !== 'lobby' };
         this.audio.sfx('join');
       } else {
         const p = this.players[slot];
@@ -197,12 +203,10 @@ export class GameHost {
     if (!p) return;
     switch (msg.t) {
       case 'in': {
-        const prev = this.phoneIn[slot] || { ic: msg.ic, pc: msg.pc, gu: msg.gu, gd: msg.gd };
+        const prev = this.phoneIn[slot] || { ic: msg.ic, pc: msg.pc };
         const pd = this.pend[slot] || (this.pend[slot] = {});
         if (msg.ic > prev.ic) pd.item = true;
         if (msg.pc > prev.pc) pd.power = true;
-        if (msg.gu > prev.gu) pd.gearUp = true;
-        if (msg.gd > prev.gd) pd.gearDown = true;
         this.phoneIn[slot] = msg;
         p.lastSeen = performance.now();
         break;
@@ -210,7 +214,6 @@ export class GameHost {
       case 'pick':
         if (this.phase !== 'lobby') break;
         if (CHARACTERS.some((c) => c.id === msg.char)) p.char = msg.char;
-        if (typeof msg.manual === 'boolean') p.manual = msg.manual;
         this.audio.sfx('select');
         this.broadcastLobby(); this.changed();
         break;
@@ -231,6 +234,15 @@ export class GameHost {
         p.view = !!msg.on;
         if (p.view && this.phase === 'race' && this.raceInit) this.send(slot, this.raceInit);
         break;
+      case 'cnext':
+        if (this.phase === 'cinematic') this.cineNext();
+        break;
+      case 'cskip':
+        if (this.hostSlot() === slot && this.phase === 'cinematic') this.cineSkip();
+        break;
+      case 'skiplevel':
+        if (this.hostSlot() === slot && this.phase === 'storyresult') this.skipLevel();
+        break;
       case 'quit':
         if (this.hostSlot() === slot) this.toLobby();
         break;
@@ -242,6 +254,7 @@ export class GameHost {
     if (c.mode && MODES.some((m) => m.id === c.mode)) this.cfg.mode = c.mode;
     if (Number.isInteger(c.track) && c.track >= 0 && c.track < TRACK_NAMES.length) this.cfg.track = c.track;
     if (Number.isInteger(c.diff) && DIFFICULTIES.some((d) => d.id === c.diff)) this.cfg.diff = c.diff;
+    if (Number.isInteger(c.level) && c.level >= 0 && c.level < STORY_LEVELS.length) this.cfg.level = c.level;
     try { localStorage.setItem('sl_cfg', JSON.stringify(this.cfg)); } catch (e) { /* nada */ }
     this.audio.sfx('select');
     if (this.phase === 'lobby') this.startDemo();
@@ -263,16 +276,15 @@ export class GameHost {
         const map = KB[kind];
         const slot = this.players.findIndex((p) => p && p.kind === kind);
         if (slot < 0) {
-          if (map.acc.includes(code)) {
+          if (map.join.includes(code)) {
             const free = this.players.findIndex((p) => !p);
-            if (free >= 0) { this.players[free] = { slot: free, kind, char: this.freeChar(), manual: false, connected: true }; this.audio.sfx('join'); this.broadcastLobby(); this.changed(); }
+            if (free >= 0) { this.players[free] = { slot: free, kind, char: this.freeChar(), connected: true }; this.audio.sfx('join'); this.broadcastLobby(); this.changed(); }
           }
         } else {
           const p = this.players[slot];
           const ci = CHARACTERS.findIndex((c) => c.id === p.char);
           if (map.left.includes(code)) { p.char = CHARACTERS[(ci + CHARACTERS.length - 1) % CHARACTERS.length].id; this.audio.sfx('select'); }
           else if (map.right.includes(code)) { p.char = CHARACTERS[(ci + 1) % CHARACTERS.length].id; this.audio.sfx('select'); }
-          else if (map.brake.includes(code)) { p.manual = !p.manual; this.audio.sfx('select'); }
           else if ((kind === 'kbA' && code === 'KeyQ') || (kind === 'kbB' && code === 'Backspace')) { this.players[slot] = null; }
           else continue;
           this.broadcastLobby(); this.changed();
@@ -290,19 +302,22 @@ export class GameHost {
         const pd = this.pend[slot] || (this.pend[slot] = {});
         if (map.item.includes(code)) pd.item = true;
         if (map.power.includes(code)) pd.power = true;
-        if (map.gearUp.includes(code)) pd.gearUp = true;
-        if (map.gearDown.includes(code)) pd.gearDown = true;
       }
       return;
     }
-    if ((this.phase === 'results' || this.phase === 'podium') && (code === 'Enter' || code === 'NumpadEnter' || code === 'Space')) this.next();
+    if (this.phase === 'cinematic') {
+      if (code === 'Escape') this.cineSkip();
+      else if (code === 'Enter' || code === 'NumpadEnter' || code === 'Space') { if (!(this.cineHook && this.cineHook())) this.cineNext(); }
+      return;
+    }
+    if (['results', 'podium', 'storyresult', 'storyend'].includes(this.phase) && (code === 'Enter' || code === 'NumpadEnter' || code === 'Space')) this.next();
   }
   onKeyUp(e) { this.keys.delete(e.code); }
 
   kbInput(kind) {
     const m = KB[kind], k = this.keys;
     const any = (arr) => arr.some((c) => k.has(c));
-    return { steer: (any(m.right) ? 1 : 0) - (any(m.left) ? 1 : 0), acc: any(m.acc), brake: any(m.brake), drift: any(m.drift) };
+    return { steer: (any(m.right) ? 1 : 0) - (any(m.left) ? 1 : 0), acc: true, brake: any(m.brake), drift: any(m.drift) };
   }
 
   removePlayer(slot) {
@@ -329,7 +344,7 @@ export class GameHost {
   }
 
   startDemo() {
-    const idx = this.cfg.mode === 'batalla' ? 'arena' : (this.cfg.mode === 'rapida' ? this.cfg.track : 0);
+    const idx = this.cfg.mode === 'batalla' ? 'arena' : this.cfg.mode === 'rapida' ? this.cfg.track : this.cfg.mode === 'historia' ? STORY_LEVELS[this.cfg.level || 0].track : 0;
     const t = this.getTrack(idx);
     this.demo = new Sim({ track: t, mode: idx === 'arena' ? 'battle' : 'race', humans: [], difficulty: 2, kartsTotal: idx === 'arena' ? 6 : 8, demo: true });
     this.demo.countdown = 0; this.demo.started = true; this.demo.demo = true;
@@ -348,23 +363,97 @@ export class GameHost {
       const free = CHARACTERS.map((c) => c.id).filter((id) => !humans.has(id)).sort(() => Math.random() - 0.5);
       this.cup = { races: [0, 1, 2, 3, 4], current: 0, points: {}, bots: free };
     } else this.cup = null;
+    if (this.cfg.mode === 'historia') {
+      this.storyRun = { level: this.cfg.level || 0 };
+      this.startStoryLevel(true);
+      return;
+    }
+    this.storyRun = null;
     this.startRace();
+  }
+
+  // ---------------- modo historia ----------------
+  storyLevel() { return this.storyRun ? STORY_LEVELS[this.storyRun.level] : null; }
+
+  storyInfo() {
+    const l = this.storyLevel();
+    if (!l) return null;
+    return { n: l.n, total: STORY_LEVELS.length, title: l.title, chapter: l.chapter, obj: l.obj, result: this.storyResult || null };
+  }
+
+  heroChars() {
+    return this.activePlayers().sort((a, b) => a.slot - b.slot).map((p) => p.char);
+  }
+
+  startStoryLevel(withIntro) {
+    const l = this.storyLevel();
+    this.storyResult = null;
+    if (withIntro && l.intro && l.intro.length) this.playCinema(l.intro, l, () => this.startRace());
+    else this.startRace();
+  }
+
+  playCinema(shots, level, onDone) {
+    const i = STORY_LEVELS.indexOf(level);
+    const nextBoss = STORY_LEVELS[i + 1] ? STORY_LEVELS[i + 1].boss : null;
+    const track = this.getTrack(level.track);
+    this.cinema = new Cinema({ track, shots, heroes: this.heroChars(), bossChar: level.boss || nextBoss || null });
+    this.cinemaDone = onDone;
+    this.cineVersion = -1;
+    this.sim = null;
+    this.renderer.setTrack(track);
+    this.phase = 'cinematic';
+    this.paused = false;
+    this.audio.playSong(STORY_SONG);
+    this.broadcast((p) => this.phaseMsg(p));
+    this.changed();
+  }
+
+  cineNext() { if (this.cinema) this.cinema.next(); }
+  cineSkip() { if (this.cinema) this.cinema.skip(); }
+
+  advanceStory() {
+    this.storyRun.level++;
+    if (this.storyRun.level >= STORY_LEVELS.length) {
+      this.phase = 'storyend';
+      this.sim = null;
+      this.audio.playSong(STORY_SONG);
+      this.broadcast((p) => this.phaseMsg(p));
+      this.changed();
+      return;
+    }
+    this.startStoryLevel(true);
+  }
+
+  skipLevel() {
+    if (!this.storyRun) return;
+    this.advanceStory();
   }
 
   startRace() {
     const mode = this.cfg.mode;
     const battle = mode === 'batalla';
-    const idx = battle ? 'arena' : mode === 'copa' ? this.cup.races[this.cup.current] : this.cfg.track;
+    const lvl = this.storyLevel();
+    const idx = lvl ? lvl.track : battle ? 'arena' : mode === 'copa' ? this.cup.races[this.cup.current] : this.cfg.track;
     const track = this.getTrack(idx);
     this.players.forEach((p) => { if (p) p.late = false; });
-    const humans = this.activePlayers().map((p) => ({ slot: p.slot, char: p.char, manual: p.manual }));
-    this.sim = new Sim({ track, mode: battle ? 'battle' : 'race', humans, difficulty: this.cfg.diff, kartsTotal: battle ? BATTLE_KARTS : RACE_KARTS, botChars: this.cup ? this.cup.bots : null });
+    const humans = this.activePlayers().map((p) => ({ slot: p.slot, char: p.char }));
+    const story = lvl ? {
+      type: lvl.type, boss: lvl.boss || null, goal: lvl.goal || 0, hits: lvl.hits || 0, target: lvl.target || 3, obj: lvl.obj,
+      time: lvl.type === 'time' ? (TIME_LIMITS[this.cfg.diff] || TIME_LIMITS[1]) : 0,
+    } : null;
+    this.cinema = null;
+    this.storyResult = null;
+    this.sim = new Sim({
+      track, mode: battle && !lvl ? 'battle' : 'race', humans, difficulty: this.cfg.diff,
+      kartsTotal: battle && !lvl ? BATTLE_KARTS : RACE_KARTS, botChars: this.cup ? this.cup.bots : null,
+      laps: lvl ? lvl.laps : undefined, story,
+    });
     this.renderer.setTrack(track);
     this.phase = 'race';
     this.paused = false;
     this.results = null;
     this.pend = {};
-    this.audio.playSong(battle ? 5 : THEMES[track.theme].music);
+    this.audio.playSong(battle && !lvl ? 5 : THEMES[track.theme].music);
     this.broadcast((i) => this.phaseMsg(i));
     // datos fijos de la carrera para los celulares que muestran el juego
     this.raceInit = raceInitMsg(this.sim, idx);
@@ -381,11 +470,22 @@ export class GameHost {
       m.cupLeft = this.cup ? this.cup.races.length - 1 - this.cup.current : 0;
       m.cup = !!this.cup;
     }
+    m.story = this.storyInfo();
+    if (this.phase === 'cinematic' && this.cinema) m.cine = this.cinema.state();
     if (this.phase === 'podium' && this.cup) m.standings = this.cupStandings().map((s) => ({ place: s.place, name: s.name, points: s.points, slot: s.slot }));
     return m;
   }
 
   endRace() {
+    if (this.storyRun) {
+      this.sim.results();
+      this.storyResult = this.sim.storyState.result === 'win' ? 'win' : 'lose';
+      this.phase = 'storyresult';
+      this.paused = false;
+      this.broadcast((i) => this.phaseMsg(i));
+      this.changed();
+      return;
+    }
     const res = this.sim.results();
     const named = res.map((r) => ({ ...r, key: r.human ? `h${r.slot}` : `b${r.char}` }));
     if (this.cup) {
@@ -418,6 +518,15 @@ export class GameHost {
   }
 
   next() {
+    if (this.phase === 'storyresult') {
+      const l = this.storyLevel();
+      if (this.storyResult === 'win') {
+        if (l.outro && l.outro.length) this.playCinema(l.outro, l, () => this.advanceStory());
+        else this.advanceStory();
+      } else this.startRace(); // reintentar
+      return;
+    }
+    if (this.phase === 'storyend') { this.toLobby(); return; }
     if (this.phase === 'results') {
       if (this.cup && this.cup.current < this.cup.races.length - 1) { this.cup.current++; this.startRace(); return; }
       if (this.cup) { this.phase = 'podium'; this.audio.sfx('finish'); this.broadcast((i) => this.phaseMsg(i)); this.changed(); return; }
@@ -428,6 +537,7 @@ export class GameHost {
   toLobby() {
     this.phase = 'lobby';
     this.sim = null; this.results = null; this.cup = null; this.paused = false;
+    this.storyRun = null; this.storyResult = null; this.cinema = null;
     // quitar celulares desconectados
     this.players = this.players.map((p) => (p && p.kind === 'phone' && !p.connected ? null : p));
     this.startDemo();
@@ -478,7 +588,34 @@ export class GameHost {
         const views = this.sim.karts.filter((k) => k.human).sort((a, b) => a.slot - b.slot);
         this.renderer.render(this.sim, views, { paused: this.paused });
       }
-    } else if (this.demo) {
+    } else if (this.phase === 'cinematic' && this.cinema) {
+      const cin = this.cinema;
+      cin.update(dt);
+      if (cin.songCue) { this.audio.playSong(cin.songCue === 'villain' ? VILLAIN_SONG : STORY_SONG); cin.songCue = null; }
+      this.renderer.render(cin.scene, [cin.camera()], { demo: true, cinema: true });
+      const ctx = this.renderer.ctx, st = cin.shot;
+      if (st && st.tint) { ctx.fillStyle = st.tint; ctx.globalAlpha = 0.28; ctx.fillRect(0, 0, this.renderer.W, this.renderer.H); ctx.globalAlpha = 1; }
+      if (cin.baronHologram()) {
+        const img = this.renderer.sp.portraits.baron;
+        const W = this.renderer.W, sz = Math.round(this.renderer.H * 0.62);
+        const bob = Math.sin(performance.now() / 400) * 4;
+        ctx.save();
+        ctx.globalAlpha = 0.78 + Math.sin(performance.now() / 90) * 0.06;
+        ctx.shadowColor = '#b44dff'; ctx.shadowBlur = 18;
+        ctx.drawImage(img, Math.round(W / 2 - sz / 2), Math.round(4 + bob), sz, sz);
+        ctx.restore();
+        ctx.fillStyle = 'rgba(180,77,255,0.12)';
+        for (let y = 0; y < this.renderer.H * 0.65; y += 3) ctx.fillRect(0, y, W, 1);
+      }
+      if (cin.flashT > 0) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, cin.flashT * 1.6)})`; ctx.fillRect(0, 0, this.renderer.W, this.renderer.H); }
+      if (cin.version !== this.cineVersion) {
+        this.cineVersion = cin.version;
+        const stt = cin.state();
+        this.broadcast((i) => ({ t: 'cine', ...stt, host: this.hostSlot() === i }));
+        this.changed();
+      }
+      if (cin.done) { const cb = this.cinemaDone; this.cinema = null; this.cinemaDone = null; if (cb) cb(); }
+    } else if (this.phase === 'lobby' && this.demo) {
       this.acc += dt;
       let n = 0;
       while (this.acc >= STEP && n < 6) { this.demo.step(STEP); this.demo.events.length = 0; this.acc -= STEP; n++; }
@@ -504,7 +641,7 @@ export class GameHost {
         k.autopilot = !p.connected || stale;
         base = m ? { steer: Math.max(-1, Math.min(1, Number(m.s) || 0)), acc: !!m.a, brake: !!m.b, drift: !!m.d } : { steer: 0, acc: false, brake: false, drift: false };
       } else base = this.kbInput(p.kind);
-      k.input = { ...base, item: !!pd.item, power: !!pd.power, gearUp: !!pd.gearUp, gearDown: !!pd.gearDown };
+      k.input = { ...base, acc: !base.brake, item: !!pd.item, power: !!pd.power };
       this.pend[k.slot] = {};
     }
   }
@@ -531,9 +668,10 @@ export class GameHost {
       if (!p || p.kind !== 'phone') continue;
       this.send(k.slot, {
         t: 'hud', mode: sim.mode, place: k.place, total: sim.karts.length, lap: Math.max(1, Math.min(sim.laps, k.lap)), laps: sim.laps,
-        item: k.rouletteT > 0 ? '?' : k.item, power: Math.round(k.power * 100) / 100, charges: k.charges, gear: k.gear, rpm: Math.round(k.rpm * 100) / 100,
-        manual: k.manual, lug: k.lug, balloons: k.balloons, elim: k.eliminated, finished: k.finished, started: sim.started,
+        item: k.rouletteT > 0 ? '?' : k.item, power: Math.round(k.power * 100) / 100, charges: k.charges,
+        balloons: k.balloons, elim: k.eliminated, finished: k.finished, started: sim.started,
         count: sim.started ? 0 : Math.ceil(sim.countdown), drift: k.driftLevel, boost: k.boostT > 0, msg: k.messageT > 0 ? k.message : '', char: k.char,
+        obj: sim.objectiveText || '',
         ft: k.finished ? Math.round(k.finishTime * 100) / 100 : 0, fl: Math.round(k.flashT * 100) / 100, v: Math.round(k.v),
       });
     }

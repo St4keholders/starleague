@@ -1,6 +1,6 @@
 // Construye la textura del piso (2048x2048), el fondo del cielo y la decoración
 import { MAP_SIZE } from './constants.js';
-import { TRACK_DEFS, ARENA_DEF, getCenterline } from './tracks.js';
+import { TRACK_DEFS, ARENA_DEF, getCenterline, TRACK_SCALE } from './tracks.js';
 import { mulberry32, pointAt, SPACING } from './geometry.js';
 import { mkCanvas, hexToRgb } from './sprites.js';
 
@@ -49,6 +49,14 @@ export const THEMES = {
     off: '#170f3a', offNoise: ['#130c30', '#1c1446', '#ffffff'],
     out: '#06041a', outNoise: ['#06041a', '#080622', '#0a0728', '#ffffff'],
     music: 4,
+  },
+  eclipse: {
+    skyTop: '#07020f', skyHor: '#5a1a7a', fog: '#2a0c3c',
+    road: '#2e2638', roadNoise: ['#26202f', '#372d44', '#2a2333', '#4a3a5c'],
+    curbA: '#b44dff', curbB: '#120a18',
+    off: '#1a1222', offNoise: ['#150e1c', '#221830', '#1c1426'],
+    out: '#05020a', outNoise: ['#05020a', '#0a0414', '#12061e', '#3a1060'],
+    music: 7,
   },
   arena: {
     skyTop: '#3a6fd0', skyHor: '#ffcfa0', fog: '#ffd8b0',
@@ -155,6 +163,21 @@ function makeSkyStrip(theme, rng) {
     planet(400, 34, 18, '#ff4fd8', '#ff9af0'); planet(1300, 22, 10, '#7ff6ff', '#d0fcff'); planet(1800, 50, 24, '#5a3cc8', '#8a6cf0');
     x.strokeStyle = '#ffe45c'; x.lineWidth = 2; x.beginPath(); x.ellipse(1800, 50, 36, 6, -0.2, 0, Math.PI * 2); x.stroke();
     x.fillStyle = 'rgba(255,79,216,0.18)'; x.beginPath(); x.ellipse(900, 40, 160, 18, 0.1, 0, Math.PI * 2); x.fill();
+  } else if (theme === 'eclipse') {
+    for (let i = 0; i < 180; i++) { x.fillStyle = rng() > 0.8 ? '#d9a6ff' : '#ffffff'; x.fillRect(rng() * W, rng() * 50, 1, 1); }
+    // sol eclipsado
+    x.fillStyle = 'rgba(255,170,60,0.35)'; x.beginPath(); x.arc(1024, 26, 24, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#ffd08a'; x.beginPath(); x.arc(1024, 26, 17, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#07020f'; x.beginPath(); x.arc(1028, 25, 16, 0, Math.PI * 2); x.fill();
+    mountains(76, 18, '#1a0a26', 10, 8);
+    // fortaleza del Barón
+    const cx = 300;
+    x.fillStyle = '#12061c';
+    x.fillRect(cx, 36, 160, 44); x.fillRect(cx - 14, 18, 30, 62); x.fillRect(cx + 144, 18, 30, 62); x.fillRect(cx + 64, 4, 34, 76);
+    x.beginPath(); x.moveTo(cx + 60, 6); x.lineTo(cx + 81, -12); x.lineTo(cx + 102, 6); x.fill();
+    for (let i = 0; i < 16; i++) x.fillRect(cx + i * 10, 32, 6, 4);
+    x.fillStyle = '#b44dff'; x.fillRect(cx + 74, 30, 14, 14); x.fillRect(cx - 4, 34, 8, 8); x.fillRect(cx + 154, 34, 8, 8);
+    x.fillStyle = 'rgba(180,77,255,0.25)'; x.beginPath(); x.ellipse(cx + 81, 40, 120, 30, 0, 0, Math.PI * 2); x.fill();
   } else if (theme === 'arena') {
     for (let i = 0; i < 10; i++) cloud(rng() * W, 14 + rng() * 22, 0.8 + rng() * 0.6, 'rgba(255,240,230,0.9)');
     // gradas con público
@@ -174,7 +197,13 @@ export function buildTrack(index) {
   const rng = mulberry32(def.seed);
   const can = mkCanvas(MAP_SIZE, MAP_SIZE);
   const ctx = can.getContext('2d', { willReadFrequently: true });
-  const pat = (base, noise, dens, star) => ctx.createPattern(noiseTile(base, noise, rng, 64, dens, star), 'repeat');
+  const S = TRACK_SCALE;
+  // los patrones mantienen su tamaño en píxeles aunque el mundo esté escalado
+  const pat = (base, noise, dens, star) => {
+    const pt = ctx.createPattern(noiseTile(base, noise, rng, 64, dens, star), 'repeat');
+    try { if (pt.setTransform && typeof DOMMatrix !== 'undefined') pt.setTransform(new DOMMatrix().scale(S)); } catch (e) { /* nada */ }
+    return pt;
+  };
   const w = def.w, ow = def.ow;
 
   const outTile = noiseTile(th.out, th.outNoise, rng, 64, def.theme === 'estelar' ? 0.25 : 0.45, def.theme === 'estelar');
@@ -188,6 +217,9 @@ export function buildTrack(index) {
   }
   ctx.fillStyle = ctx.createPattern(outTile, 'repeat');
   ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
+  // a partir de aquí se dibuja en unidades del mundo
+  ctx.save();
+  ctx.scale(1 / S, 1 / S);
 
   // bandas exteriores
   if (def.outside === 'wall') {
@@ -200,6 +232,9 @@ export function buildTrack(index) {
     strokePath(ctx, cl, 2 * (w + ow + 5), th.rim);
   } else if (def.theme === 'estelar') {
     strokePath(ctx, cl, 2 * (w + ow + 3), '#7ff6ff');
+  } else if (def.theme === 'eclipse') {
+    strokePath(ctx, cl, 2 * (w + ow + 5), '#b44dff');
+    strokePath(ctx, cl, 2 * (w + ow + 2), '#2a0c3c');
   }
   strokePath(ctx, cl, 2 * (w + ow), pat(th.off, th.offNoise, 0.4, def.theme === 'estelar'));
   // bordillo
@@ -207,6 +242,7 @@ export function buildTrack(index) {
   strokePath(ctx, cl, 2 * (w + 6), th.curbB, [16, 16]);
   // asfalto
   strokePath(ctx, cl, 2 * w, pat(th.road, th.roadNoise, 0.5));
+  if (def.theme === 'eclipse') strokePath(ctx, cl, 3, '#b44dff55', [14, 26]);
   if (def.theme === 'estelar') {
     strokePath(ctx, cl, 2 * w - 18, '#3a2e8055');
     strokePath(ctx, cl, 2, '#ff4fd866', [10, 22]);
@@ -248,8 +284,10 @@ export function buildTrack(index) {
       });
     }
   }
+  ctx.restore();
   // decoración
   const decor = [];
+  const WORLD = MAP_SIZE * S;
   const bag = [];
   for (const k in def.decor) for (let i = 0; i < def.decor[k]; i++) bag.push(k);
   const minDist = w + ow + (def.outside === 'wall' ? 22 : 12);
@@ -259,7 +297,7 @@ export function buildTrack(index) {
       const lat = side * (minDist + 6 + rng() * 150);
       const nx = -cl.ty[i], ny = cl.tx[i];
       const x = cl.xs[i] + nx * lat + (rng() - 0.5) * 30, y = cl.ys[i] + ny * lat + (rng() - 0.5) * 30;
-      if (x < 20 || y < 20 || x > MAP_SIZE - 20 || y > MAP_SIZE - 20) continue;
+      if (x < 20 || y < 20 || x > WORLD - 20 || y > WORLD - 20) continue;
       let ok = true;
       for (let j = 0; j < cl.N; j += 2) { if ((cl.xs[j] - x) ** 2 + (cl.ys[j] - y) ** 2 < minDist * minDist) { ok = false; break; } }
       if (!ok) continue;
@@ -274,16 +312,16 @@ export function buildTrack(index) {
 
   const sky = makeSkyStrip(def.theme, rng);
   return {
-    index, def, theme: def.theme, th, cl, w, ow,
+    index, def, theme: def.theme, th, cl, w, ow, scale: S, worldSize: WORLD,
     tex: toU32(can), outer: toU32(outTile),
     sky, skyTop: hexToRgb(th.skyTop), skyHor: hexToRgb(th.skyHor), fog: hexToRgb(th.fog),
     decor,
-    minimap: makeMinimap(cl, w, th),
+    minimap: makeMinimap(cl, w, th, WORLD),
   };
 }
 
-function makeMinimap(cl, w, th) {
-  const S = 96, k = S / MAP_SIZE;
+function makeMinimap(cl, w, th, world) {
+  const S = 96, k = S / world;
   const c = mkCanvas(S, S), x = c.getContext('2d');
   x.beginPath();
   for (let i = 0; i <= cl.N; i++) { const j = i % cl.N; const px = cl.xs[j] * k, py = cl.ys[j] * k; if (!i) x.moveTo(px, py); else x.lineTo(px, py); }
@@ -332,7 +370,7 @@ function buildArena() {
   mx.fillStyle = th.road; mx.fillRect(min * k, min * k, (max - min) * k, (max - min) * k);
   mx.fillStyle = '#5a48b0'; for (const p of def.pillars) { mx.beginPath(); mx.arc(p.x * k, p.y * k, p.r * k, 0, Math.PI * 2); mx.fill(); }
   return {
-    index: 'arena', def, theme: 'arena', th, arena: true,
+    index: 'arena', def, theme: 'arena', th, arena: true, scale: 1, worldSize: MAP_SIZE,
     tex: toU32(can), outer: toU32(outTile),
     sky: makeSkyStrip('arena', rng), skyTop: hexToRgb(th.skyTop), skyHor: hexToRgb(th.skyHor), fog: hexToRgb(th.fog),
     decor, minimap: mm,

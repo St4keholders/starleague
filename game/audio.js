@@ -29,7 +29,21 @@ const SONGS = [
     bpm: 100, key: 60, roots: [0, -3, 5, 7], q: ['M', 'm', 'M', 'M'],
     mel: '12 . . 7 . 9 . . | 12 . . 4 . 7 . . | 9 . 7 . 5 . 4 . | 2 . . 4 . 7 . .',
   },
+  { // 7 · Fortaleza Eclipse (final)
+    bpm: 160, key: 62, roots: [0, -4, -7, -5], q: ['m', 'M', 'M', 'M'],
+    mel: '0 3 7 12 11 7 3 7 | 8 . 7 . 3 . 0 . | 5 8 12 15 14 12 8 5 | 7 . 11 . 14 . 12 11',
+  },
+  { // 8 · cinemáticas
+    bpm: 84, key: 57, roots: [0, -4, 3, -2], q: ['m', 'M', 'M', 'M'],
+    mel: '12 . . . 10 . . . | 8 . . . 7 . . . | 7 . . 8 . . 10 . | 12 . . . . . . .',
+  },
+  { // 9 · cinemática del villano
+    bpm: 96, key: 50, roots: [0, 1, 0, -1], q: ['m', 'M', 'm', 'M'],
+    mel: '0 . 3 . 6 . 3 . | 1 . 4 . 7 . 4 . | 0 . 3 . 6 . 9 . | 8 . 6 . 3 . 1 .',
+  },
 ];
+export const STORY_SONG = 8;
+export const VILLAIN_SONG = 9;
 
 function parseMel(s) {
   return s.replace(/\|/g, ' ').split(/\s+/).filter(Boolean).map((t) => (t === '.' ? null : Number(t)));
