@@ -517,3 +517,23 @@ export function fmtTime(t) {
   const m = Math.floor(t / 60), s = Math.floor(t % 60), cs = Math.floor((t * 100) % 100);
   return `${m}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
+
+// efectos de las cinemáticas encima de la imagen: tinte, holograma del Barón y destello
+export function drawCinemaFx(r, fx) {
+  if (!fx) return;
+  const ctx = r.ctx, W = r.W, H = r.H;
+  if (fx.tint) { ctx.fillStyle = fx.tint; ctx.globalAlpha = 0.28; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  if (fx.holo) {
+    const img = r.sp.portraits.baron;
+    const sz = Math.round(H * 0.62);
+    const bob = Math.sin(performance.now() / 400) * 4;
+    ctx.save();
+    ctx.globalAlpha = 0.78 + Math.sin(performance.now() / 90) * 0.06;
+    ctx.shadowColor = '#b44dff'; ctx.shadowBlur = 18;
+    ctx.drawImage(img, Math.round(W / 2 - sz / 2), Math.round(4 + bob), sz, sz);
+    ctx.restore();
+    ctx.fillStyle = 'rgba(180,77,255,0.12)';
+    for (let y = 0; y < H * 0.65; y += 3) ctx.fillRect(0, y, W, 1);
+  }
+  if (fx.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, fx.flash * 1.6)})`; ctx.fillRect(0, 0, W, H); }
+}
