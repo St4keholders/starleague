@@ -103,6 +103,7 @@ function Game() {
       {st && host && st.phase === 'storyresult' && <StoryResult st={st} host={host} />}
       {st && host && st.phase === 'storyend' && <StoryEnd host={host} portraits={portraits} st={st} />}
       {st && host && st.phase === 'race' && !st.paused && <button className="corner-btn" onClick={() => host.togglePause()} title="Pausa (Esc)">II</button>}
+      {st && host && (st.phase === 'race' || st.phase === 'cinematic') && <div className="turn-hint">📱↻ Gira el celular para ver el juego más grande</div>}
     </div>
   );
 }
@@ -113,9 +114,41 @@ function fullscreen() {
   else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
 }
 
+function useTouch() {
+  const [touch, setTouch] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)');
+    const upd = () => setTouch(mq.matches);
+    upd();
+    mq.addEventListener ? mq.addEventListener('change', upd) : mq.addListener(upd);
+    return () => { mq.removeEventListener ? mq.removeEventListener('change', upd) : mq.removeListener(upd); };
+  }, []);
+  return touch;
+}
+
+function ShareButton({ url, code }) {
+  const [msg, setMsg] = useState('');
+  const share = async () => {
+    const text = `¡Únete a Star League! Código: ${code}`;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Star League', text, url }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(url); setMsg('¡Link copiado!'); }
+    catch (e) { setMsg('Copia el link: ' + url); }
+    setTimeout(() => setMsg(''), 3000);
+  };
+  return (
+    <>
+      <button className="btn share" onClick={share} disabled={!url}>📤 Compartir link</button>
+      {msg && <div className="share-msg">{msg}</div>}
+    </>
+  );
+}
+
 function Lobby({ st, host, qr, url, portraits }) {
   const n = st.players.filter(Boolean).length;
   const { cfg } = st;
+  const touch = useTouch();
   return (
     <div className="overlay lobby">
       <div className="lobby-main">
@@ -136,7 +169,7 @@ function Lobby({ st, host, qr, url, portraits }) {
                     <button className="slot-x" title="Quitar" onClick={() => host.removePlayer(i)}>✕</button>
                   </>
                 ) : (
-                  <div className="slot-empty">Escanea el QR<br /><small>o pulsa W / ↑ en el teclado</small></div>
+                  <div className="slot-empty">Escanea el QR{!touch && <><br /><small>o pulsa W / ↑ en el teclado</small></>}</div>
                 )}
               </div>
             ))}
@@ -150,6 +183,8 @@ function Lobby({ st, host, qr, url, portraits }) {
               {st.peerStatus === 'ready' ? '● Listo para conectar celulares' : st.peerStatus === 'error' ? '● ' + (st.peerError || 'Sin conexión') : '● Conectando…'}
             </div>
             <div className="qr-help">Escanea con la cámara del celular. Si no, abre <b>{url.split('?')[0].replace(/^https?:\/\//, '')}</b> y escribe el código.</div>
+            <ShareButton url={url} code={st.code} />
+            {touch && <div className="qr-note">Este dispositivo es la pantalla del juego. Para jugar, cada uno se conecta con su propio celular: escaneen el QR o compartan el link.</div>}
           </div>
         </div>
       </div>
@@ -185,7 +220,7 @@ function Lobby({ st, host, qr, url, portraits }) {
         <button className="btn gold start" disabled={!n} onClick={() => host.startGame()}>{n ? '¡Empezar!' : 'Esperando jugadores'}</button>
       </div>
       <div className="lobby-foot">
-        <span>El carro acelera solo · Teclado de respaldo: <b>J con WASD</b> (W para unirse): A/D gira, S frena, Espacio derrapa, Q objeto, E poder · <b>J con flechas</b> (↑ para unirse): ←/→ gira, ↓ frena, Shift der. derrapa, «-» objeto, «.» poder · En el lobby: A/D o ←/→ cambia personaje</span>
+        <span className="kb-help">El carro acelera solo · Teclado de respaldo: <b>J con WASD</b> (W para unirse): A/D gira, S frena, Espacio derrapa, Q objeto, E poder · <b>J con flechas</b> (↑ para unirse): ←/→ gira, ↓ frena, Shift der. derrapa, «-» objeto, «.» poder · En el lobby: A/D o ←/→ cambia personaje</span>
         <span className="foot-btns">
           <button className="mini" onClick={() => host.toggleMute()}>{st.muted ? '🔇 Sonido' : '🔊 Sonido'}</button>
           <button className="mini" onClick={fullscreen}>⛶ Pantalla completa</button>

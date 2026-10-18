@@ -314,3 +314,82 @@ button:disabled { cursor: default; opacity: 0.5; }
 .m-cine-box.villain .m-cine-name { color: #d98aff; }
 .m-cine-text { font-size: 17px; line-height: 1.5; color: #fff; margin: 0; }
 .m-cine-btns { width: min(560px, 100%); }
+
+/* ---------- compartir ---------- */
+.btn.share { font-size: 11px; padding: 10px 14px; }
+.share-msg { font-size: 13px; color: #3ddc84; }
+.qr-note { font-size: 13px; line-height: 1.45; color: var(--gold); max-width: 34ch; }
+
+/* ---------- pantalla principal abierta en un celular o tablet ---------- */
+@media (max-width: 900px), (max-height: 560px) {
+  .lobby { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); overflow-y: auto; -webkit-overflow-scrolling: touch; background: rgba(10, 5, 22, 0.9); }
+  .lobby-main { display: flex; flex-direction: column; gap: 14px; }
+  .lobby-left { display: contents; }
+  .lobby > *, .lobby-main > *, .lobby-main .logo, .lobby-main .slots, .lobby-right { flex: none; min-height: auto; }
+  .qr-card { flex: 1 1 auto; width: 100%; min-width: 0; }
+  .lobby-main > .lobby-left > .logo, .lobby-main > .lobby-right, .lobby-main > .lobby-left > .slots { width: 100%; }
+  .lobby-left .logo { order: 0; justify-content: center; }
+  .lobby-right { order: 1; }
+  .slots { order: 2; grid-template-columns: 1fr 1fr; gap: 16px 10px; flex: none; }
+  .slot { min-height: 74px; padding: 14px 10px 10px; gap: 8px; }
+  .slot-face { width: 48px; height: 48px; }
+  .slot-name { font-size: 11px; margin-bottom: 4px; }
+  .slot-meta, .slot-power { font-size: 12px; }
+  .slot-empty { font-size: 9px; }
+  .qr-card { padding: 16px; gap: 10px; box-shadow: 5px 5px 0 #07040f; }
+  .qr-card img { width: min(200px, 60vw); border-width: 4px; }
+  .code { font-size: 26px; letter-spacing: 6px; }
+  .qr-help { max-width: 40ch; }
+  .lobby-bar { flex-direction: column; align-items: stretch; gap: 14px; padding: 14px; }
+  .cfg-group { min-width: 0; }
+  .seg button { flex: 1 1 auto; font-size: 10px; padding: 11px 8px; }
+  .sel { max-width: none; width: 100%; font-size: 10px; }
+  .start { margin-left: 0; width: 100%; font-size: 15px; }
+  .lobby-foot { justify-content: center; }
+  .kb-help { display: none; }
+  .foot-btns { flex-wrap: wrap; justify-content: center; }
+  .mini { font-size: 13px; padding: 10px 12px; }
+
+  .card { min-width: 0; width: min(560px, calc(100vw - 24px)); padding: 18px 16px; max-height: calc(100dvh - 24px); }
+  .card h2 { font-size: 15px; line-height: 1.4; }
+  .story-card { min-width: 0; }
+  .results td { padding: 3px 4px; font-size: 13px; }
+  .results img { width: 30px; height: 30px; }
+  .results .nm { font-size: 10px; }
+  .results .pl { font-size: 11px; }
+  .podium { min-width: 0; }
+  .podium-row { gap: 6px; }
+  .pod { width: 31%; }
+  .pod img { width: 64px; height: 64px; }
+  .pod-block { font-size: 16px; }
+  .pod.p1 .pod-block { height: 90px; } .pod.p2 .pod-block { height: 66px; } .pod.p3 .pod-block { height: 48px; }
+  .standings { columns: 1; }
+  .end-heroes img { width: 60px; height: 60px; }
+
+  .cine .bar { height: 6vh; }
+  .cine-box { width: calc(100vw - 20px); bottom: 7vh; gap: 10px; padding: 10px 12px; }
+  .cine-face { width: 52px; height: 52px; }
+  .cine-name { font-size: 10px; margin-bottom: 6px; }
+  .cine-line { font-size: 15px; min-height: 2.6em; }
+  .cine-hint { display: none; }
+  .cine-skip { top: calc(6vh + 8px); font-size: 10px; padding: 8px 10px; }
+}
+
+/* celular horizontal: QR a la izquierda, jugadores a la derecha */
+@media (max-height: 560px) and (min-width: 600px) {
+  .lobby-main { display: grid; grid-template-columns: minmax(0, 34%) minmax(0, 1fr); grid-template-areas: "qr logo" "qr slots"; gap: 12px 16px; align-items: start; }
+  .lobby-right { grid-area: qr; min-width: 0; }
+  .qr-card { min-width: 0; padding: 12px; }
+  .qr-help, .qr-note { font-size: 11px; }
+  .btn.share { font-size: 9px; padding: 8px 10px; }
+  .lobby-main .logo { grid-area: logo; }
+  .lobby-main .slots { grid-area: slots; }
+  .qr-card img { width: min(150px, 30vh); }
+  .code { font-size: 20px; }
+}
+
+/* celular vertical con el juego corriendo: sugerir girarlo */
+.turn-hint { display: none; }
+@media (orientation: portrait) and (max-width: 700px) {
+  .turn-hint { display: block; position: absolute; left: 0; right: 0; bottom: calc(12px + env(safe-area-inset-bottom)); text-align: center; font-family: var(--pix); font-size: 10px; line-height: 1.6; color: var(--mute); padding: 0 16px; pointer-events: none; }
+}
