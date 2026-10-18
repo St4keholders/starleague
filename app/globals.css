@@ -429,3 +429,11 @@ button:disabled { cursor: default; opacity: 0.5; }
 .me-warn { font-size: 13px; color: var(--coral); }
 @media (max-width: 600px) { .me-chars { grid-template-columns: repeat(4, 1fr); } }
 @media (max-width: 900px), (max-height: 560px) { .lobby-me { flex: none; } }
+
+/* ---------- historia 2 ---------- */
+.cine-box.alien { border-color: #9dff3a; background: rgba(6, 26, 10, 0.94); }
+.cine-box.alien .cine-name { color: #b8ff7a; }
+.m-cine-box.alien { border-color: #9dff3a; }
+.m-cine-box.alien .m-cine-name { color: #b8ff7a; }
+.m-cine-face img.alien { filter: sepia(1) hue-rotate(50deg) saturate(4) brightness(0.95); }
+.end-heroes img.unlocked { outline: 3px solid var(--gold); background: rgba(255, 210, 63, 0.15); }

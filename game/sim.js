@@ -40,27 +40,40 @@ export class Sim {
     const free = CHARACTERS.map((c) => c.id).filter((id) => !used.has(id));
     let shuffled = botChars ? botChars.filter((id) => !used.has(id)) : free.sort(() => Math.random() - 0.5);
     if (!shuffled.length) shuffled.push(...free);
-    if (story && story.boss) shuffled = [story.boss, ...shuffled.filter((id) => id !== story.boss)];
+    // jefe y aliado de la historia (pueden repetir personaje: p. ej. el clon de J1)
+    const special = [];
+    if (story && story.boss) special.push(story.boss);
+    if (story && story.ally) special.push(story.ally);
+    shuffled = shuffled.filter((id) => !special.includes(id));
+    if (!shuffled.length) shuffled.push(...CHARACTERS.map((c) => c.id));
     const total = Math.max(kartsTotal, humans.length);
-    const bots = [];
-    for (let i = 0; i < total - humans.length; i++) bots.push(shuffled[i % shuffled.length]);
+    const bots = [...special];
+    for (let i = 0; bots.length < total - humans.length; i++) bots.push(shuffled[i % shuffled.length]);
     this.karts = [];
     bots.forEach((c, i) => {
       const k = this.makeKart(c, false, -1);
       if (story && story.boss && i === 0) {
-        k.boss = c === 'baron' ? 2 : 1;
+        k.boss = 1;
+        k.skin = story.bossSkin === undefined ? (c === 'baron' ? null : 'shadow') : story.bossSkin;
         k.speedMul = [0.93, 0.98, 1.03][difficulty] || 0.98;
         if (story.type === 'chase') k.speedMul = [0.9, 0.94, 0.98][difficulty] || 0.94;
+        if (c === 'zorg') k.speedMul += 0.015; // el emperador corre en casa
+      } else if (story && story.ally && c === story.ally && !this.karts.some((o) => o.ally)) {
+        k.ally = true;
+        k.speedMul = [1.0, 0.97, 0.95][difficulty] || 0.97;
+      } else if (story && story.rivalSkin) {
+        k.skin = story.rivalSkin;
       }
       this.karts.push(k);
     });
     humans.forEach((h) => this.karts.push(this.makeKart(h.char, true, h.slot)));
-    // en la historia los jugadores salen adelante, justo detrás del jefe
+    // en la historia los jugadores salen adelante, justo detrás del jefe (y del aliado)
     if (story) {
       const boss = this.karts.filter((k) => k.boss);
+      const ally = this.karts.filter((k) => k.ally);
       const hs = this.karts.filter((k) => k.human);
-      const rest = this.karts.filter((k) => !k.boss && !k.human);
-      this.karts = [...boss, ...hs, ...rest];
+      const rest = this.karts.filter((k) => !k.boss && !k.human && !k.ally);
+      this.karts = [...boss, ...ally, ...hs, ...rest];
       this.karts.forEach((k, i) => { k.id = i; });
     }
 
@@ -235,9 +248,10 @@ export class Sim {
     if (surf === 'off') { maxV *= this.track.theme === 'nieve' ? 0.5 : 0.56; }
     else if (surf === 'shallow') { maxV *= 0.42; }
     else if (surf === 'ice') { grip = 1.7; }
+    else if (surf === 'goo') { maxV *= 0.55; }
     if (k.stickyT > 0) maxV *= 0.55;
     if (k.blindT > 0 && !k.human) maxV *= 0.85;
-    if (!k.human && !k.finished) maxV *= k.boss ? this.bossMul(k) : this.botSpeedMul(k);
+    if (!k.human && !k.finished) maxV *= k.boss ? this.bossMul(k) : k.ally ? this.allyMul(k) : this.botSpeedMul(k);
     if (k.finished && k.human) maxV *= 0.8;
     if (k.boostT > 0) { maxV = Math.max(maxV, topV * 1.34); accel *= 3; }
 
@@ -308,7 +322,7 @@ export class Sim {
 
     // efectos
     if (k.boostT > 0 && Math.random() < 0.8) this.flame(k);
-    if (surf === 'off' && Math.abs(k.v) > 60 && Math.random() < 0.35) this.dust(k);
+    if ((surf === 'off' || surf === 'goo') && Math.abs(k.v) > 60 && Math.random() < 0.35) this.dust(k);
 
     // límites del mundo
     if (this.arena) this.arenaBounds(k); else this.trackBounds(k, dt);
@@ -350,6 +364,7 @@ export class Sim {
         if (z.type === 'boost') { if (k.boostT < 0.8) this.sfx('boost'); k.boostT = Math.max(k.boostT, 0.85); }
         else if (z.type === 'ramp' && k.v > 90) { k.vz = 210 + k.v * 0.25; k.z = 1; this.sfx('jump'); if (k.boostT <= 0) k.boostT = 0.3; }
         else if (z.type === 'ice') surf = 'ice';
+        else if (z.type === 'goo') surf = 'goo';
       }
     }
     if (surf === 'road' && k.z <= 0.5) k.lastSafe = k.idx;
@@ -370,6 +385,7 @@ export class Sim {
       if (prevIdx > N * 0.75 && k.idx < N * 0.25) {
         if (k.half) {
           k.lap++; k.half = false;
+          if (this.story && this.story.type === 'elim') this.elimLap(k);
           if (k.lap > this.laps) this.finish(k);
           else if (k.lap > 1) {
             if (k.lap === this.laps) { this.say(k, '¡VUELTA FINAL!', 2); if (k.human) this.sfx('final'); }
@@ -552,6 +568,7 @@ export class Sim {
 
   hit(k, kind, src) {
     if (k.eliminated || k.fallT > 0) return false;
+    if (k.ally && src && src.human) return false; // el aliado no recibe daño del equipo
     if (k.finished && this.mode === 'race') return false;
     if (k.invulnT > 0) return false;
     if (k.shieldT > 0) { k.shieldT = 0; k.invulnT = 0.7; this.sfx('pop'); this.say(k, '¡ESCUDO!', 0.8); return false; }
@@ -616,7 +633,7 @@ export class Sim {
           this.effects.push({ type: 'boom', x: h.x, y: h.y, t: 0.5, max: 0.5 });
           this.sfx('boom');
           for (let i = 0; i < 12; i++) this.part(h.x, h.y, 4, (Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, 80 + Math.random() * 120, 0.7, i % 2 ? '#ffb02e' : '#ff5a14', 3);
-          for (const k of this.karts) if (k.z < 14 && Math.hypot(k.x - h.x, k.y - h.y) < 34) this.hit(k, 'spin', null);
+          for (const k of this.karts) if (k.z < 14 && Math.hypot(k.x - h.x, k.y - h.y) < 34 && !(k.boss && h.skin === 'meteor')) this.hit(k, 'spin', null);
         }
       }
     }
@@ -742,7 +759,7 @@ export class Sim {
     this.part(k.x - ca * 13, k.y - sa * 13, 4 + k.z, -ca * 60 + (Math.random() - 0.5) * 30, -sa * 60 + (Math.random() - 0.5) * 30, 10, 0.22, Math.random() < 0.5 ? '#ffd23f' : '#ff6a1a', 3);
   }
   dust(k) {
-    const col = { pradera: '#8ad05a', playa: '#f7dc98', nieve: '#ffffff', volcan: '#5a4a4e', estelar: '#ff4fd8' }[this.track.theme] || '#ccc';
+    const col = { pradera: '#8ad05a', playa: '#f7dc98', nieve: '#ffffff', volcan: '#5a4a4e', estelar: '#ff4fd8', anillos: '#e6c890', jungla: '#9dff3a', neon: '#2ef0ff', coliseo: '#8a6a50', eclipse: '#b44dff' }[this.track.theme] || '#ccc';
     this.part(k.x - Math.cos(k.a) * 10, k.y - Math.sin(k.a) * 10, 2, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, 40 + Math.random() * 40, 0.4, col, 2);
   }
   updateParts(dt) {
@@ -784,6 +801,11 @@ export class Sim {
     for (const p of this.puddles) {
       const dx = p.x - s.x, dy = p.y - s.y;
       if (dx * dx + dy * dy < (p.r + 40) ** 2) lane = p.x * -s.ty + p.y * s.tx > s.x * -s.ty + s.y * s.tx ? -0.6 : 0.6;
+    }
+    for (const z of this.zones) {
+      if (z.type !== 'goo' || !inRange((k.idx + look) % cl.N, z.i0 - 10, z.i1, cl.N)) continue;
+      const mid = (z.d0 + z.d1) / 2 / w;
+      if (lane * w > z.d0 - 10 && lane * w < z.d1 + 10) lane = mid > 0 ? -0.55 : 0.55;
     }
     const tx = s.x + -s.ty * lane * w, ty = s.y + s.tx * lane * w;
     const want = Math.atan2(ty - k.y, tx - k.x);
@@ -874,6 +896,8 @@ export class Sim {
       return;
     }
     const sorted = [...this.karts].sort((a, b) => {
+      if (a.eliminated !== b.eliminated) return a.eliminated ? 1 : -1;
+      if (a.eliminated && b.eliminated) return (b.elimAt || 0) - (a.elimAt || 0);
       if (a.finished && b.finished) return a.finishTime - b.finishTime;
       if (a.finished) return -1;
       if (b.finished) return 1;
@@ -900,7 +924,7 @@ export class Sim {
     } else {
       const humans = this.karts.filter((k) => k.human);
       if (this.endTimer < 0) {
-        if (humans.every((h) => h.finished)) { this.endTimer = 3; if (this.story && !this.storyState.result) this.storyLose(); }
+        if (humans.every((h) => h.finished || h.eliminated)) { this.endTimer = 3; if (this.story && !this.storyState.result) this.storyLose(); }
         else if (this.firstHumanFinish >= 0 && this.raceTime - this.firstHumanFinish > 45) this.endTimer = 0.5;
       }
     }
@@ -980,9 +1004,55 @@ Object.assign(Sim.prototype, {
     }
   },
 
+  // eliminación: cada vez que el líder completa una vuelta, salen los dos últimos
+  elimLap(k) {
+    const N = this.track.cl.N;
+    const lapNow = k.lap;
+    if (lapNow < 2 || lapNow > this.laps || lapNow <= (this.elimLapDone || 1)) return;
+    this.elimLapDone = lapNow;
+    this.rank();
+    const alive = this.karts.filter((o) => !o.eliminated && !o.finished).sort((a, b) => a.place - b.place);
+    const out = alive.slice(-2);
+    for (const o of out) {
+      if (alive.length - out.length < 1) break;
+      o.eliminated = true; o.elimAt = this.raceTime; o.drift = 0; o.boostT = 0;
+      this.elimOrder.push(o);
+      this.say(o, '¡ELIMINADO!', 99);
+      this.buzz(o, 300);
+      for (const h of this.karts) if (h.human && h !== o && !h.eliminated) this.say(h, `¡${o.ch.name.toUpperCase()} ELIMINADO!`, 1.6);
+    }
+    this.sfx('elim');
+    void N;
+    if (this.karts.filter((h) => h.human).every((h) => h.eliminated)) this.storyLose();
+  },
+
+  allyMul(k) {
+    const m = k.speedMul || 1;
+    const humans = this.karts.filter((o) => o.human);
+    if (!humans.length) return m;
+    const N = this.track.cl.N;
+    const best = Math.max(...humans.map((h) => h.progress));
+    const diff = k.progress - best;
+    if (diff < -N * 0.15) return m * 1.08; // no se queda muy atrás del equipo
+    if (diff > N * 0.2) return m * 0.95;
+    return m;
+  },
+
   storyOnFinish(k) {
     const st = this.story;
     if (!st || this.storyState.result) return;
+    if (st.type === 'protect') {
+      // solo cuentan los rivales: como máximo "maxAhead" pueden llegar antes que el aliado
+      const max = st.maxAhead === undefined ? 2 : st.maxAhead;
+      const rivalsDone = this.finishOrder.filter((o) => !o.human && !o.ally).length;
+      if (k.ally) { if (rivalsDone <= max) this.storyWin(); else this.storyLose(); }
+      else if (!k.human && rivalsDone > max) this.storyLose();
+      return;
+    }
+    if (st.type === 'elim') {
+      if (k.human) this.storyWin();
+      return;
+    }
     if (st.type === 'top') {
       if (k.human && k.place <= st.target) this.storyWin();
       else if (this.finishOrder.length >= st.target && !this.finishOrder.slice(0, st.target).some((o) => o.human)) this.storyLose();
@@ -1007,6 +1077,15 @@ Object.assign(Sim.prototype, {
     else if (st.type === 'boss') txt = this.boss ? `JEFE: ${this.boss.place}º` : '';
     else if (st.type === 'collect') txt = `★ ${ss.collected}/${ss.goal}`;
     else if (st.type === 'chase') txt = `ALCANCES ${ss.hits}/${ss.goal}`;
+    else if (st.type === 'elim') {
+      const alive = this.karts.filter((o) => !o.eliminated).length;
+      txt = `QUEDAN ${alive} · ¡NO SEAS ÚLTIMO!`;
+    } else if (st.type === 'protect') {
+      const al = this.karts.find((o) => o.ally);
+      const max = st.maxAhead === undefined ? 2 : st.maxAhead;
+      const ahead = al ? this.karts.filter((o) => !o.human && !o.ally && o.place < al.place).length : 0;
+      txt = al ? `BARÓN: ${ahead} ${ahead === 1 ? 'CLON' : 'CLONES'} ADELANTE (MÁX ${max})` : '';
+    }
     else if (st.type === 'time') txt = `TIEMPO ${Math.floor(ss.timeLeft / 60)}:${String(Math.floor(ss.timeLeft % 60)).padStart(2, '0')}`;
     this.objectiveText = txt;
   },

@@ -58,6 +58,42 @@ export const THEMES = {
     out: '#05020a', outNoise: ['#05020a', '#0a0414', '#12061e', '#3a1060'],
     music: 7,
   },
+  anillos: {
+    skyTop: '#05030f', skyHor: '#3a2a6a', fog: '#241a48',
+    road: '#c9a46a', roadNoise: ['#bd9860', '#d6b27a', '#b08a52', '#e6c890'],
+    curbA: '#ffe6b0', curbB: '#8a5a2a',
+    off: '#7a5a38', offNoise: ['#6a4c30', '#8a6844', '#5a4028'],
+    out: '#05030f', outNoise: ['#05030f', '#08061a', '#0c0a24', '#ffffff'],
+    music: 10,
+  },
+  jungla: {
+    skyTop: '#16584e', skyHor: '#d4ff9e', fog: '#a6e2a0',
+    road: '#5e4470', roadNoise: ['#523a62', '#6a4e7e', '#584068'],
+    curbA: '#8cff4a', curbB: '#5a1a8a',
+    off: '#2f9e64', offNoise: ['#278a56', '#3ab872', '#2a9460', '#ff6ad8'],
+    wall: '#17503a', wallNoise: ['#12422f', '#1f6447', '#6a1a8a'],
+    out: '#22825a', outNoise: ['#1d7550', '#2a9466', '#ff6ad8', '#9dff3a'],
+    goo: '#9dff3a',
+    music: 11,
+  },
+  neon: {
+    skyTop: '#04020c', skyHor: '#40104e', fog: '#1c0830',
+    road: '#24243c', roadNoise: ['#1e1e34', '#2a2a46', '#22223a'],
+    curbA: '#ff2ea6', curbB: '#2ef0ff',
+    off: '#121226', offNoise: ['#0e0e20', '#18182e', '#2ef0ff'],
+    wall: '#0a0a18', wallNoise: ['#141428', '#ff2ea6', '#2ef0ff'],
+    out: '#08081a', outNoise: ['#0c0c22', '#101028', '#14142e', '#181834', '#1c1c3a', '#ffd23f'],
+    music: 12,
+  },
+  coliseo: {
+    skyTop: '#170804', skyHor: '#e07a2a', fog: '#8a4620',
+    road: '#686878', roadNoise: ['#5c5c6c', '#747486', '#62627a', '#8a8aa0'],
+    curbA: '#ffd23f', curbB: '#2a2a3a',
+    off: '#4a3a30', offNoise: ['#3e3028', '#56443a', '#463628'],
+    wall: '#3a2456', wallNoise: ['#2e1c46', '#8a4dff', '#4a3070'],
+    out: '#2a1a14', outNoise: ['#24160f', '#33201a', '#ff7a1a'],
+    music: 13,
+  },
   arena: {
     skyTop: '#3a6fd0', skyHor: '#ffcfa0', fog: '#ffd8b0',
     road: '#c4b6ff', roadNoise: ['#b9aaf8', '#cdc0ff'],
@@ -178,6 +214,48 @@ function makeSkyStrip(theme, rng) {
     for (let i = 0; i < 16; i++) x.fillRect(cx + i * 10, 32, 6, 4);
     x.fillStyle = '#b44dff'; x.fillRect(cx + 74, 30, 14, 14); x.fillRect(cx - 4, 34, 8, 8); x.fillRect(cx + 154, 34, 8, 8);
     x.fillStyle = 'rgba(180,77,255,0.25)'; x.beginPath(); x.ellipse(cx + 81, 40, 120, 30, 0, 0, Math.PI * 2); x.fill();
+  } else if (theme === 'anillos') {
+    for (let i = 0; i < 300; i++) { x.fillStyle = rng() > 0.85 ? '#ffe45c' : '#ffffff'; x.fillRect(rng() * W, rng() * 60, 1, 1); }
+    // planeta gigante con anillos
+    x.fillStyle = '#d9a35a'; x.beginPath(); x.arc(1200, 52, 40, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#c2884a'; for (let i = -3; i <= 3; i++) x.fillRect(1162, 52 + i * 9, 76, 3);
+    x.strokeStyle = '#ffe6b0'; x.lineWidth = 3; x.beginPath(); x.ellipse(1200, 56, 90, 12, -0.12, 0, Math.PI * 2); x.stroke();
+    x.strokeStyle = '#a07040'; x.lineWidth = 2; x.beginPath(); x.ellipse(1200, 56, 104, 15, -0.12, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = '#7ff6ff'; x.beginPath(); x.arc(400, 26, 8, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'rgba(255,79,216,0.15)'; x.beginPath(); x.ellipse(1800, 36, 150, 16, 0.2, 0, Math.PI * 2); x.fill();
+  } else if (theme === 'jungla') {
+    for (let i = 0; i < 6; i++) { const px = rng() * W; x.fillStyle = 'rgba(255,255,255,0.7)'; x.beginPath(); x.ellipse(px, 14 + rng() * 14, 26, 6, 0, 0, Math.PI * 2); x.fill(); }
+    x.fillStyle = '#ff9ae8'; x.beginPath(); x.arc(600, 22, 12, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#9dff3a'; x.beginPath(); x.arc(640, 30, 6, 0, Math.PI * 2); x.fill();
+    mountains(66, 22, '#2a7a5a', 18, 6);
+    // hojas gigantes y hongos al horizonte
+    for (let i = 0; i < 40; i++) {
+      const px = rng() * W, h = 14 + rng() * 22;
+      x.fillStyle = rng() > 0.5 ? '#1e6a48' : '#2a8a5a';
+      x.beginPath(); x.moveTo(px, 80); x.quadraticCurveTo(px - 10, 80 - h, px + 4, 80 - h - 6); x.quadraticCurveTo(px + 8, 80 - h / 2, px + 6, 80); x.fill();
+    }
+    for (let i = 0; i < 10; i++) { const px = rng() * W; x.fillStyle = '#ff6ad8'; x.beginPath(); x.ellipse(px, 66, 12, 6, 0, Math.PI, 0); x.fill(); x.fillStyle = '#f0e0ff'; x.fillRect(px - 2, 66, 4, 14); }
+  } else if (theme === 'neon') {
+    for (let i = 0; i < 120; i++) { x.fillStyle = '#ffffff'; x.fillRect(rng() * W, rng() * 30, 1, 1); }
+    // rascacielos con ventanas de colores
+    for (let i = 0; i < 70; i++) {
+      const bw = 14 + rng() * 26, bh = 20 + rng() * 52, px = rng() * W;
+      x.fillStyle = rng() > 0.5 ? '#14142e' : '#1c1238';
+      x.fillRect(px, 80 - bh, bw, bh);
+      for (let wy = 80 - bh + 3; wy < 78; wy += 5) for (let wx = px + 2; wx < px + bw - 2; wx += 4) {
+        if (rng() > 0.55) { x.fillStyle = ['#ff2ea6', '#2ef0ff', '#ffd23f', '#9dff3a'][Math.floor(rng() * 4)]; x.fillRect(wx, wy, 2, 2); }
+      }
+    }
+    x.fillStyle = 'rgba(255,46,166,0.25)'; x.fillRect(0, 74, W, 6);
+  } else if (theme === 'coliseo') {
+    // asteroides flotando y el gran coliseo
+    for (let i = 0; i < 12; i++) { const px = rng() * W, r = 4 + rng() * 10; x.fillStyle = '#4a2a1a'; x.beginPath(); x.arc(px, 10 + rng() * 30, r, 0, Math.PI * 2); x.fill(); }
+    x.fillStyle = '#2a1a30'; x.fillRect(0, 50, W, 30);
+    for (let i = 0; i < W; i += 24) { x.fillStyle = '#3a2456'; x.fillRect(i, 42, 18, 38); x.fillStyle = '#ffd23f'; x.fillRect(i + 6, 48, 6, 8); }
+    for (let i = 0; i < 600; i++) { x.fillStyle = ['#9dff3a', '#7ff6ff', '#ff6ad8', '#ffd23f'][Math.floor(rng() * 4)]; x.fillRect(rng() * W, 60 + rng() * 18, 2, 2); }
+    // estatua de Zorg al horizonte
+    x.fillStyle = '#1a0f22'; x.fillRect(1010, 8, 28, 42); x.beginPath(); x.arc(1024, 10, 18, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#9dff3a'; x.fillRect(1014, 6, 4, 4); x.fillRect(1022, 4, 4, 4); x.fillRect(1030, 6, 4, 4);
   } else if (theme === 'arena') {
     for (let i = 0; i < 10; i++) cloud(rng() * W, 14 + rng() * 22, 0.8 + rng() * 0.6, 'rgba(255,240,230,0.9)');
     // gradas con público
@@ -232,6 +310,9 @@ export function buildTrack(index) {
     strokePath(ctx, cl, 2 * (w + ow + 5), th.rim);
   } else if (def.theme === 'estelar') {
     strokePath(ctx, cl, 2 * (w + ow + 3), '#7ff6ff');
+  } else if (def.theme === 'anillos') {
+    strokePath(ctx, cl, 2 * (w + ow + 6), '#ffe6b0');
+    strokePath(ctx, cl, 2 * (w + ow + 3), '#5a3a1a');
   } else if (def.theme === 'eclipse') {
     strokePath(ctx, cl, 2 * (w + ow + 5), '#b44dff');
     strokePath(ctx, cl, 2 * (w + ow + 2), '#2a0c3c');
@@ -243,6 +324,8 @@ export function buildTrack(index) {
   // asfalto
   strokePath(ctx, cl, 2 * w, pat(th.road, th.roadNoise, 0.5));
   if (def.theme === 'eclipse') strokePath(ctx, cl, 3, '#b44dff55', [14, 26]);
+  if (def.theme === 'neon') { strokePath(ctx, cl, 3, '#ffd23f99', [18, 22]); }
+  if (def.theme === 'anillos') { strokePath(ctx, cl, 2 * w - 26, '#b08a5244'); }
   if (def.theme === 'estelar') {
     strokePath(ctx, cl, 2 * w - 18, '#3a2e8055');
     strokePath(ctx, cl, 2, '#ff4fd866', [10, 22]);
@@ -276,6 +359,12 @@ export function buildTrack(index) {
         c.fillStyle = '#1a1a22';
         for (let k = -W / 2; k < W / 2; k += 12) { c.beginPath(); c.moveTo(-L / 2, k); c.lineTo(-L / 2 + 6, k); c.lineTo(L / 2, k + 10); c.lineTo(L / 2 - 6, k + 10); c.fill(); }
         c.fillStyle = '#ffffff'; c.fillRect(L / 2 - 3, -W / 2, 3, W);
+      });
+    } else if (z.type === 'goo') {
+      zoneQuad(ctx, cl, w, z, (c, L, W) => {
+        c.fillStyle = '#5ac21a'; c.beginPath(); c.ellipse(0, 0, L / 2, W / 2, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = th.goo; c.beginPath(); c.ellipse(-2, -2, L / 2 - 5, W / 2 - 5, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#e8ffb0'; for (let i = 0; i < 9; i++) { c.beginPath(); c.arc(-L / 3 + rng() * L * 0.66, -W / 4 + rng() * W * 0.5, 2 + rng() * 3, 0, Math.PI * 2); c.fill(); }
       });
     } else if (z.type === 'ice') {
       zoneQuad(ctx, cl, w, z, (c, L, W) => {

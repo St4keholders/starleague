@@ -244,3 +244,195 @@ export const STORY_LEVELS = [
 
 // tiempo límite del contrarreloj según la dificultad (segundos para 2 vueltas)
 export const TIME_LIMITS = [118, 102, 90];
+
+// ======================================================================
+// HISTORIA 2 · El Torneo Galáctico (7 niveles)
+// Quién habla: n = narrador, h0/h1 = jugadores, x = Barón Eclipse (aliado),
+// z = Zorg el Invicto, b = jefe del nivel (clon)
+// ======================================================================
+export const STORY2_LEVELS = [
+  {
+    n: 1, chapter: 'Etapa 1 · Senda Estelar', title: 'La invitación', track: 4,
+    type: 'top', target: 3, laps: 2, obj: 'Termina entre los 3 primeros',
+    intro: [
+      { cam: fly(0.05, 0.3, 160), title: 'STAR LEAGUE 2', sub: 'El Torneo Galáctico', dur: 3.4, lines: [] },
+      { cam: fly(0.3, 0.45, 90), lines: [
+        ['n', 'La Estrella Madre volvió a brillar… y su luz se vio hasta el otro lado de la galaxia.'],
+        ['n', 'Una mañana llegó una invitación dorada a los cinco mundos.'],
+      ] },
+      { cam: orbit('grid', 110, 45, 0.3), fx: 'flash', tint: '#0a3a1a', song: 'zorg', lines: [
+        ['z', '¡Saludos, terrícolas! Soy Zorg el Invicto, emperador de la Nebulosa Verde.'],
+        ['z', 'Los invito a mi Torneo Galáctico. El premio: el legendario Trofeo Cometa.'],
+        ['z', 'Nadie me ha ganado jamás… pero pueden intentarlo. ¡Jo, jo!'],
+      ] },
+      { cam: orbit('h0', 34, 6, 0.3), song: 'story', lines: [
+        ['h0', '¡Un torneo en el espacio! Tenemos que ir.'],
+        ['h1', 'Primera etapa: la Senda Estelar. ¡A calentar motores!'],
+      ] },
+    ],
+    outro: [
+      { cam: orbit('h1', 34, 6, 0.3), lines: [
+        ['h1', '¡Pasamos la primera etapa!'],
+      ] },
+      { cam: fly(0.5, 0.7, 140), tint: '#1a0a2a', song: 'villain', lines: [
+        ['x', 'Psst… soy yo, el Barón. Tengan cuidado: el torneo de Zorg está arreglado.'],
+        ['x', 'Los voy a vigilar desde las sombras. Sigan corriendo.'],
+      ] },
+    ],
+  },
+  {
+    n: 2, chapter: 'Etapa 2 · Anillos de Saturnia', title: 'Eliminación en los anillos', track: 6,
+    type: 'elim', laps: 3, rivalSkin: 'alien', obj: 'Eliminación: que no te saquen y llega a la meta',
+    intro: [
+      { cam: fly(0.1, 0.35, 170), title: 'Etapa 2', sub: 'Anillos de Saturnia', dur: 3, lines: [] },
+      { cam: fly(0.35, 0.5, 90), song: 'zorg', lines: [
+        ['z', 'Bienvenidos a mis anillos. Aquí las reglas son simples:'],
+        ['z', 'cada vez que el primero complete una vuelta, ¡los dos últimos quedan eliminados!'],
+      ] },
+      { cam: orbit('h0', 34, 6, 0.3), song: 'story', lines: [
+        ['h0', 'Oigan… ¿por qué los otros corredores son verdes?'],
+        ['h1', 'Se parecen a nuestros amigos… pero con ojos raros. Qué miedo.'],
+        ['n', 'Objetivo: no quedes de último cuando el líder complete una vuelta y llega a la meta.'],
+      ] },
+    ],
+    outro: [
+      { cam: orbit('h0', 34, 6, 0.3), lines: [
+        ['h0', '¡Sobrevivimos a la eliminación!'],
+      ] },
+      { cam: fly(0.6, 0.8, 140), tint: '#1a0a2a', song: 'villain', lines: [
+        ['x', 'Esos corredores verdes son CLONES. Zorg tiene una máquina que copia a los campeones.'],
+        ['x', 'La máquina funciona con cristales Gloop. Si se los quitamos, no podrá hacer más.'],
+      ] },
+    ],
+  },
+  {
+    n: 3, chapter: 'Etapa 3 · Jungla Gloop', title: 'Cristales en la baba', track: 7,
+    type: 'collect', goal: 12, laps: 2, rivalSkin: 'alien', obj: 'Recojan 12 cristales entre todos',
+    intro: [
+      { cam: fly(0.05, 0.3, 160), title: 'Etapa 3', sub: 'Jungla Gloop', dur: 3, lines: [] },
+      { cam: fly(0.3, 0.45, 80), lines: [
+        ['n', 'En la Jungla Gloop crecen los cristales que alimentan la máquina de clones.'],
+        ['h1', '¡Cuidado con los charcos verdes! Esa baba frena muchísimo.'],
+        ['n', 'Objetivo: recojan 12 cristales entre todos en 2 vueltas.'],
+      ] },
+    ],
+    outro: [
+      { cam: orbit('h0', 34, 6, 0.3), lines: [
+        ['h0', '¡Tenemos los cristales! Sin ellos, la máquina se queda sin energía.'],
+      ] },
+      { cam: fly(0.6, 0.8, 140), tint: '#0a3a1a', song: 'zorg', lines: [
+        ['z', '¡¿MIS CRISTALES?! Esto no se queda así, terrícolas.'],
+        ['z', 'Y ya sé quién los está ayudando… ¡Clones, atrapen al Barón!'],
+      ] },
+    ],
+  },
+  {
+    n: 4, chapter: 'Etapa 4 · Ciudad Neón', title: 'Cuiden al Barón', track: 8,
+    type: 'protect', ally: 'baron', maxAhead: 1, laps: 2, rivalSkin: 'alien',
+    obj: 'Protejan al Barón: máximo 1 clon puede llegar antes que él',
+    intro: [
+      { cam: fly(0.05, 0.3, 170), title: 'Etapa 4', sub: 'Ciudad Neón', dur: 3, lines: [] },
+      { cam: orbit('a', 40, 8, 0.3), lines: [
+        ['x', '¡Ya no me escondo! Me inscribí en el torneo para correr con ustedes.'],
+        ['x', 'Pero todos los clones de Zorg vienen detrás de mí…'],
+        ['h0', '¡Tranquilo, Barón! Nosotros te cuidamos.'],
+        ['n', 'Objetivo: que el Barón llegue a la meta con máximo 1 clon adelante. Usen sus objetos contra los clones que lo pasen.'],
+      ] },
+    ],
+    outro: [
+      { cam: orbit('a', 40, 8, 0.3), lines: [
+        ['x', '¡Gracias, equipo! Y descubrí algo: Zorg mandó a un espía con los planos de la máquina.'],
+        ['h1', '¿Hacia dónde fue?'],
+        ['x', '¡Al Volcán Fortaleza! Si lo alcanzan, recuperamos los planos.'],
+      ] },
+    ],
+  },
+  {
+    n: 5, chapter: 'Etapa 5 · Volcán Fortaleza', title: 'El clon espía', track: 3,
+    type: 'chase', boss: 'chispa', bossSkin: 'alien', hits: 3, laps: 2, rivalSkin: 'alien',
+    obj: 'Alcancen 3 veces al Clon de Chispa',
+    intro: [
+      { cam: fly(0.1, 0.3, 160), title: 'Etapa 5', sub: 'Volcán Fortaleza', dur: 3, lines: [] },
+      { cam: orbit('b', 36, 8, 0.4), tint: '#0a3a1a', song: 'zorg', lines: [
+        ['b', '¡Ji, ji! Los planos son de Zorg. ¡No me van a alcanzar!'],
+        ['h0', 'Es un clon de Chispa… ¡y es igual de rápida!'],
+        ['n', 'Objetivo: alcancen 3 veces al {b}, chocándolo o con objetos, antes de 2 vueltas.'],
+      ] },
+    ],
+    outro: [
+      { cam: orbit('b', 34, 6, 0.3), fx: 'flash', song: 'story', lines: [
+        ['b', '¡Está bien, me rindo! Tomen los planos…'],
+        ['n', 'El clon se desvaneció en una nube de chispas verdes.'],
+      ] },
+      { cam: fly(0.4, 0.6, 150), tint: '#0a3a1a', song: 'zorg', lines: [
+        ['z', '¿Creen que eso me detiene? Mi mejor clon los espera en la Fortaleza Eclipse.'],
+        ['x', '¡¿En MI fortaleza?! Esto ya es personal.'],
+      ] },
+    ],
+  },
+  {
+    n: 6, chapter: 'Etapa 6 · Fortaleza Eclipse', title: 'Tu propio clon', track: 5,
+    type: 'boss', boss: 'h0', bossSkin: 'alien', laps: 2, rivalSkin: 'alien',
+    obj: 'Llega antes que tu clon',
+    intro: [
+      { cam: fly(0.0, 0.2, 170), title: 'Etapa 6', sub: 'Fortaleza Eclipse', dur: 3, lines: [] },
+      { cam: orbit('b', 40, 10, 0.35), tint: '#0a3a1a', song: 'zorg', lines: [
+        ['z', 'Les presento mi obra maestra: ¡el {b}! Tiene tu misma velocidad y tus mismos trucos.'],
+        ['h0', '¡¿Ese soy yo?! Pero verde…'],
+        ['b', 'Yo soy el original ahora. ¡A ver quién llega primero!'],
+        ['n', 'Objetivo: llega antes que el {b}.'],
+      ] },
+    ],
+    outro: [
+      { cam: orbit('b', 36, 8, 0.4), fx: 'flash', song: 'story', lines: [
+        ['b', 'Imposible… nadie le gana a una copia perfecta…'],
+        ['n', 'Sin cristales y sin su mejor clon, la máquina de Zorg se apagó para siempre.'],
+        ['x', 'Solo queda él. Lo encontrarán en su Coliseo.'],
+      ] },
+    ],
+  },
+  {
+    n: 7, chapter: 'Etapa final · Coliseo de Zorg', title: 'Zorg el Invicto', track: 9,
+    type: 'boss', boss: 'zorg', bossSkin: null, ally: 'baron', laps: 3, rivalSkin: 'alien',
+    obj: 'Llega antes que Zorg el Invicto',
+    intro: [
+      { cam: fly(0.0, 0.25, 180), title: 'Etapa final', sub: 'Coliseo de Zorg', dur: 3.2, song: 'zorg', lines: [] },
+      { cam: fly(0.25, 0.4, 90), lines: [
+        ['n', 'El Coliseo de Zorg flota sobre un asteroide. Las tribunas rugen.'],
+        ['n', 'Cuidado: aquí caen meteoritos sobre la pista.'],
+      ] },
+      { cam: orbit('b', 40, 10, 0.3), tint: '#0a3a1a', lines: [
+        ['z', 'En mil años, nadie le ha ganado a Zorg el Invicto en su propio coliseo.'],
+        ['h1', 'Nosotros vencimos al Barón Eclipse. ¡Tú no eres diferente!'],
+        ['x', '¡Vamos, equipo! Esta vez corro a su lado.'],
+        ['n', 'Objetivo final: llega antes que Zorg. ¡3 vueltas!'],
+      ] },
+    ],
+    outro: [
+      { cam: orbit('b', 40, 10, 0.4), fx: 'flash', lines: [
+        ['z', '¿Perdí…? ¿YO? Bueno… fue una carrera limpia. Se ganaron el Trofeo Cometa.'],
+        ['z', 'Prometo correr sin trampas en el próximo torneo.'],
+      ] },
+      { cam: fly(0.0, 0.3, 200), fx: 'flash', song: 'story', lines: [
+        ['x', 'Amigos… gracias por confiar en mí. Ahora sí soy parte del equipo.'],
+        ['h0', '¡Bienvenido a la Star League, Barón!'],
+        ['n', '¡El Barón Eclipse ya se puede elegir como corredor! Gracias por jugar.'],
+      ] },
+    ],
+  },
+];
+
+export const STORIES = [
+  {
+    id: 1, title: 'El Robo de las Estrellas', levels: STORY_LEVELS,
+    end: { title: '¡La Estrella Madre volvió a brillar!', text: 'Recuperaron los cinco fragmentos y derrotaron al Barón Eclipse.' },
+  },
+  {
+    id: 2, title: 'El Torneo Galáctico', levels: STORY2_LEVELS,
+    end: { title: '¡Campeones del Torneo Galáctico!', text: 'Vencieron a Zorg el Invicto y ganaron el Trofeo Cometa. ¡El Barón Eclipse ya es jugable!', unlock: 'baron' },
+  },
+];
+
+export function storyById(id) {
+  return STORIES.find((s) => s.id === id) || STORIES[0];
+}

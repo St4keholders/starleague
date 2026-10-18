@@ -28,7 +28,7 @@ function loadCtrl() {
 }
 function saveCtrl(c) { try { localStorage.setItem('sl_ctrl3', JSON.stringify(c)); } catch (e) { /* nada */ } }
 // el juego en el celular para la pista (la Fortaleza Eclipse usa la canción 7)
-const songFor = (m) => (m.cinema ? 8 : m.track === 'arena' ? 5 : m.track === 5 ? 7 : m.track);
+const songFor = (m) => (typeof m.song === 'number' ? m.song : m.cinema ? 8 : m.track === 'arena' ? 5 : m.track === 5 ? 7 : m.track);
 async function goFullscreen() {
   try {
     const el = document.documentElement;
@@ -323,8 +323,8 @@ export default function ControllerApp() {
           {c.title && <div className="m-cine-title over"><b>{c.title}</b>{c.sub && <span>{c.sub}</span>}</div>}
           <div className="m-cineview-bottom">
             {line && (
-              <div className={'m-cine-box row' + (line.char === 'baron' || line.shadow ? ' villain' : '')}>
-                <div className="m-cine-face">{line.char ? <img className={line.shadow ? 'shadow' : ''} src={art.p[line.char]} alt="" /> : <span>★</span>}</div>
+              <div className={'m-cine-box row' + (line.char === 'zorg' || line.skin === 'alien' ? ' alien' : line.char === 'baron' || line.shadow ? ' villain' : '')}>
+                <div className="m-cine-face">{line.char ? <img className={line.skin === 'alien' ? 'alien' : line.shadow ? 'shadow' : ''} src={art.p[line.char]} alt="" /> : <span>★</span>}</div>
                 <div><div className="m-cine-name">{line.name}</div><p className="m-cine-text">{line.text}</p></div>
               </div>
             )}
@@ -340,8 +340,8 @@ export default function ControllerApp() {
       <div className="m-screen m-cine" style={{ '--c': color }} onClick={() => send({ t: 'cnext' })}>
         {c.title && <div className="m-cine-title"><b>{c.title}</b>{c.sub && <span>{c.sub}</span>}</div>}
         {line ? (
-          <div className={'m-cine-box' + (line.char === 'baron' || line.shadow ? ' villain' : '')}>
-            <div className="m-cine-face">{line.char ? <img className={line.shadow ? 'shadow' : ''} src={art.p[line.char]} alt="" /> : <span>★</span>}</div>
+          <div className={'m-cine-box' + (line.char === 'zorg' || line.skin === 'alien' ? ' alien' : line.char === 'baron' || line.shadow ? ' villain' : '')}>
+            <div className="m-cine-face">{line.char ? <img className={line.skin === 'alien' ? 'alien' : line.shadow ? 'shadow' : ''} src={art.p[line.char]} alt="" /> : <span>★</span>}</div>
             <div className="m-cine-name">{line.name}</div>
             <p className="m-cine-text">{line.text}</p>
           </div>
@@ -361,7 +361,8 @@ export default function ControllerApp() {
       <div className="m-screen m-center" style={{ '--c': color }}>
         <div className="m-tag">{SLOT_NAMES[slot]}</div>
         <div className="m-big">{phase === 'storyend' ? '★' : win ? '✓' : '✗'}</div>
-        <h2>{phase === 'storyend' ? '¡La Estrella Madre volvió a brillar!' : win ? '¡Nivel superado!' : 'No lo lograron'}</h2>
+        <h2>{phase === 'storyend' ? ((st.end && st.end.title) || '¡Historia completada!') : win ? '¡Nivel superado!' : 'No lo lograron'}</h2>
+        {phase === 'storyend' && st.end && <p>{st.end.text}</p>}
         {phase === 'storyresult' && <p>Nivel {st.n} de {st.total}: {st.title}<br />{st.obj}</p>}
         {isHost ? (
           phase === 'storyend' ? <button className="m-btn gold wide" onClick={() => send({ t: 'next' })}>Volver al lobby</button> : win ? (
@@ -416,7 +417,7 @@ export default function ControllerApp() {
         <div className="m-card">
           <div className="m-h">Tu personaje</div>
           <div className="m-chars">
-            {CHARACTERS.map((c) => {
+            {[...CHARACTERS, ...((lobby && lobby.extra) || []).map(charById)].map((c) => {
               const takenBy = lobby.players.findIndex((p, i) => p && i !== slot && p.char === c.id);
               return (
                 <button key={c.id} className={'m-char' + (me.char === c.id ? ' on' : '')} onClick={() => send({ t: 'pick', char: c.id })}>
@@ -460,6 +461,9 @@ export default function ControllerApp() {
           <div className="m-seg col">{MODES.map((m) => <button key={m.id} className={lobby.cfg.mode === m.id ? 'on' : ''} onClick={() => send({ t: 'cfg', cfg: { mode: m.id } })}>{m.name}</button>)}</div>
           {lobby.cfg.mode === 'historia' && lobby.levels && (
             <>
+              {lobby.stories && (
+                <div className="m-seg col">{lobby.stories.map((h) => <button key={h.id} className={(lobby.cfg.story || 1) === h.id ? 'on' : ''} onClick={() => send({ t: 'cfg', cfg: { story: h.id } })}>Historia {h.id}: {h.title} ({h.n})</button>)}</div>
+              )}
               <div className="m-small">Empezar en:</div>
               <select className="m-sel" value={lobby.cfg.level || 0} onChange={(e) => send({ t: 'cfg', cfg: { level: Number(e.target.value) } })}>
                 {lobby.levels.map((l, i) => <option key={l} value={i}>{l}</option>)}

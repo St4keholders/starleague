@@ -1,22 +1,25 @@
 // Director de cinemáticas: tomas de cámara sobre la pista + diálogos
 import { Sim } from './sim.js';
-import { charById, shadowName, VILLAIN } from './constants.js';
+import { charById, shadowName, cloneName, VILLAIN, ZORG } from './constants.js';
 import { sampleAtIdx, wrapAngle } from './geometry.js';
 
 const CHARS_PER_SEC = 38;
 
 export class Cinema {
   // heroes: ids de personaje de los jugadores (en orden J1, J2…); bossChar: jefe de la escena
-  constructor({ track, shots, heroes, bossChar }) {
+  // bossSkin: 'shadow' | 'alien' | null ; allyChar: aliado en escena ; rivalSkin: aspecto de los rivales
+  constructor({ track, shots, heroes, bossChar, bossSkin, allyChar, rivalSkin }) {
     this.track = track;
     this.shots = shots || [];
     this.heroes = heroes.length ? heroes : ['pipo'];
     this.bossChar = bossChar || null;
+    this.bossSkin = bossSkin === undefined ? (bossChar === VILLAIN.id ? null : 'shadow') : bossSkin;
+    this.allyChar = allyChar || null;
     this.scene = new Sim({
       track, mode: 'race', demo: true, laps: 99,
       humans: this.heroes.map((c, i) => ({ slot: i, char: c })),
       kartsTotal: 8,
-      story: bossChar ? { type: 'boss', boss: bossChar } : null,
+      story: bossChar || allyChar ? { type: 'boss', boss: bossChar || null, bossSkin: this.bossSkin, ally: this.allyChar, rivalSkin: rivalSkin || null } : null,
     });
     this.scene.karts.forEach((k) => { if (k.human) k.autopilot = true; });
     this.shotIdx = -1;
@@ -78,32 +81,44 @@ export class Cinema {
   }
 
   // ---- quién habla ----
+  bossName() {
+    const id = this.bossChar || VILLAIN.id;
+    if (this.bossSkin === 'alien' || id === ZORG.id) return cloneName(id);
+    return shadowName(id);
+  }
+
   speaker(who) {
-    if (who === 'n') return { name: 'Narrador', char: null, shadow: false };
-    if (who === 'x') return { name: VILLAIN.name, char: VILLAIN.id, shadow: false };
+    if (who === 'n') return { name: 'Narrador', char: null, shadow: false, skin: null };
+    if (who === 'x') return { name: VILLAIN.name, char: VILLAIN.id, shadow: false, skin: null };
+    if (who === 'z') return { name: ZORG.full, char: ZORG.id, shadow: false, skin: null };
     if (who === 'b') {
       const id = this.bossChar || VILLAIN.id;
-      return { name: shadowName(id), char: id, shadow: id !== VILLAIN.id };
+      const skin = id === VILLAIN.id || id === ZORG.id ? null : this.bossSkin;
+      return { name: this.bossName(), char: id, shadow: skin === 'shadow', skin };
     }
     const i = Number(who.slice(1)) || 0;
     const id = this.heroes[i % this.heroes.length];
-    return { name: charById(id).name, char: id, shadow: false };
+    return { name: charById(id).name, char: id, shadow: false, skin: null };
   }
 
   fill(text) {
     return text
       .replace(/\{h0\}/g, charById(this.heroes[0]).name)
       .replace(/\{h1\}/g, charById(this.heroes[1 % this.heroes.length]).name)
-      .replace(/\{b\}/g, this.bossChar ? shadowName(this.bossChar) : VILLAIN.name);
+      .replace(/\{b\}/g, this.bossChar ? this.bossName() : VILLAIN.name);
   }
 
-  // ¿el Barón habla sin estar en la escena? (se muestra como holograma en el cielo)
-  baronHologram() {
-    if (this.done || this.bossChar === VILLAIN.id) return false;
+  // ¿el Barón o Zorg hablan sin estar en la escena? (se muestran como holograma en el cielo)
+  hologram() {
+    if (this.done) return null;
     const s = this.shot;
     const line = s && s.lines && s.lines[this.lineIdx];
-    return !!(line && line[0] === 'x');
+    if (!line) return null;
+    const id = line[0] === 'x' ? VILLAIN.id : line[0] === 'z' ? ZORG.id : null;
+    if (!id || id === this.bossChar || id === this.allyChar) return null;
+    return id;
   }
+  baronHologram() { return !!this.hologram(); }
 
   state() {
     if (this.done) return { done: true, v: this.version };
@@ -157,6 +172,7 @@ export class Cinema {
   target(on) {
     const sc = this.scene;
     if (on === 'b') return sc.karts.find((k) => k.boss) || sc.karts[0];
+    if (on === 'a') return sc.karts.find((k) => k.ally) || sc.karts[0];
     if (on === 'h0' || on === 'h1') {
       const humans = sc.karts.filter((k) => k.human).sort((a, b) => a.slot - b.slot);
       const i = on === 'h1' ? 1 % humans.length : 0;
