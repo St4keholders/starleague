@@ -4,6 +4,7 @@ import { CHARACTERS, MODES, DIFFICULTIES, TRACK_NAMES, SLOT_COLORS, SLOT_NAMES, 
 import { getPortraitURLs, getItemIconURLs } from '../game/sprites';
 import { peerOptionsFromURL } from '../game/peeropts';
 import { Audio } from '../game/audio';
+import { PadBtn } from './TouchControls';
 
 const SENS = [{ id: 0, name: 'Suave', deg: 40 }, { id: 1, name: 'Normal', deg: 30 }, { id: 2, name: 'Fuerte', deg: 21 }];
 
@@ -15,11 +16,19 @@ function getPid() {
   } catch (e) { return Math.random().toString(36).slice(2); }
 }
 function loadCtrl() {
-  const def = { mode: 'buttons', invert: false, sens: 1, view: false, sound: true };
-  try { const c = JSON.parse(localStorage.getItem('sl_ctrl2') || 'null'); if (c) return { ...def, ...c }; } catch (e) { /* nada */ }
+  // view: null = automático (se ve el juego aquí cuando no hay pantalla principal)
+  const def = { mode: 'buttons', invert: false, sens: 1, view: null, sound: true };
+  try {
+    const c = JSON.parse(localStorage.getItem('sl_ctrl3') || 'null');
+    if (c) return { ...def, ...c };
+    const old = JSON.parse(localStorage.getItem('sl_ctrl2') || 'null');
+    if (old) { const { view, ...rest } = old; return { ...def, ...rest }; }
+  } catch (e) { /* nada */ }
   return def;
 }
-function saveCtrl(c) { try { localStorage.setItem('sl_ctrl2', JSON.stringify(c)); } catch (e) { /* nada */ } }
+function saveCtrl(c) { try { localStorage.setItem('sl_ctrl3', JSON.stringify(c)); } catch (e) { /* nada */ } }
+// el juego en el celular para la pista (la Fortaleza Eclipse usa la canción 7)
+const songFor = (m) => (m.cinema ? 8 : m.track === 'arena' ? 5 : m.track === 5 ? 7 : m.track);
 async function goFullscreen() {
   try {
     const el = document.documentElement;
@@ -60,16 +69,20 @@ export default function ControllerApp() {
   const getAudio = () => { if (!audioRef.current) audioRef.current = new Audio(); return audioRef.current; };
 
   useEffect(() => { ctrlRef.current = ctrl; saveCtrl(ctrl); }, [ctrl]);
+  const noScreen = !!(lobby && lobby.noScreen);
+  const viewOn = ctrl.view === null || ctrl.view === undefined ? noScreen : !!ctrl.view;
+  const viewRef = useRef(viewOn);
+  viewRef.current = viewOn;
   useEffect(() => {
     phaseRef.current = phase;
-    if (phase !== 'race' && audioRef.current) audioRef.current.stopSong();
+    if (phase !== 'race' && phase !== 'cinematic' && audioRef.current) audioRef.current.stopSong();
   }, [phase]);
   useEffect(() => { slotRef.current = slot; }, [slot]);
   // avisar al PC si este celular quiere ver el juego
   useEffect(() => {
-    if (status === 'online' && slot !== null) send({ t: 'view', on: !!ctrl.view });
-    if (!ctrl.view && audioRef.current) audioRef.current.stopSong();
-  }, [status, slot, ctrl.view]);
+    if (status === 'online' && slot !== null) send({ t: 'view', on: viewOn });
+    if (!viewOn && audioRef.current) audioRef.current.stopSong();
+  }, [status, slot, viewOn]);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -104,12 +117,12 @@ export default function ControllerApp() {
           mirrorRef.current = null;
           setRaceKey((k) => k + 1);
           const c = ctrlRef.current;
-          if (c.view && c.sound && audioRef.current && audioRef.current.ctx) audioRef.current.playSong(m.track === 'arena' ? 5 : m.track);
+          if (viewRef.current && c.sound && audioRef.current && audioRef.current.ctx) audioRef.current.playSong(songFor(m));
           break;
         }
         case 'snap':
           if (mirrorRef.current) mirrorRef.current.push(m);
-          if (m.s && m.s.length && ctrlRef.current.view && ctrlRef.current.sound && audioRef.current) m.s.forEach((n) => audioRef.current.sfx(n));
+          if (m.s && m.s.length && viewRef.current && ctrlRef.current.sound && audioRef.current) m.s.forEach((n) => audioRef.current.sfx(n));
           break;
         case 'buzz': if (navigator.vibrate) { try { navigator.vibrate(m.ms); } catch (e) { /* nada */ } } break;
         case 'paused': setPaused(!!m.v); break;
@@ -198,7 +211,7 @@ export default function ControllerApp() {
   }).current;
 
   const activateSensor = async () => {
-    if (ctrlRef.current.view && ctrlRef.current.sound) getAudio().init();
+    if (viewRef.current && ctrlRef.current.sound) getAudio().init();
     // 1) permiso del sensor primero: el iPhone lo exige justo al tocar
     let denied = false;
     try {
@@ -258,7 +271,7 @@ export default function ControllerApp() {
 
   const useArrows = async () => {
     setCtrl((c) => ({ ...c, mode: 'buttons' }));
-    if (ctrlRef.current.view && ctrlRef.current.sound) getAudio().init();
+    if (viewRef.current && ctrlRef.current.sound) getAudio().init();
     await goFullscreen();
     try { if ('wakeLock' in navigator && !wakeRef.current) wakeRef.current = await navigator.wakeLock.request('screen'); } catch (e) { /* nada */ }
   };
@@ -290,12 +303,12 @@ export default function ControllerApp() {
   if (phase === 'race') {
     return (
       <RacePad
-        hud={hud} ctrl={ctrl} inp={inp} wheelRef={wheelRef} center={center} portrait={portrait}
+        hud={hud} ctrl={{ ...ctrl, view: viewOn }} inp={inp} wheelRef={wheelRef} center={center} portrait={portrait}
         color={color} slot={slot} art={art} paused={paused} lost={lost} isHost={isHost}
         onPause={() => send({ t: 'pause' })} onQuit={() => send({ t: 'quit' })}
         sensorOn={sensor === 'on'} activateSensor={activateSensor}
         raceKey={raceKey} raceInitRef={raceInitRef} mirrorRef={mirrorRef}
-        onToggleView={() => setCtrl((c) => ({ ...c, view: !c.view }))}
+        onToggleView={() => setCtrl((c) => ({ ...c, view: !viewOn }))}
       />
     );
   }
@@ -303,6 +316,26 @@ export default function ControllerApp() {
   if (phase === 'cinematic') {
     const c = cine || {};
     const line = c.line;
+    if (viewOn && raceInitRef.current && raceInitRef.current.cinema) {
+      return (
+        <div className="m-cineview" style={{ '--c': color }} onClick={() => send({ t: 'cnext' })}>
+          <GameView raceKey={raceKey} raceInitRef={raceInitRef} mirrorRef={mirrorRef} slot={slot} paused={false} className="cine-canvas" />
+          {c.title && <div className="m-cine-title over"><b>{c.title}</b>{c.sub && <span>{c.sub}</span>}</div>}
+          <div className="m-cineview-bottom">
+            {line && (
+              <div className={'m-cine-box row' + (line.char === 'baron' || line.shadow ? ' villain' : '')}>
+                <div className="m-cine-face">{line.char ? <img className={line.shadow ? 'shadow' : ''} src={art.p[line.char]} alt="" /> : <span>★</span>}</div>
+                <div><div className="m-cine-name">{line.name}</div><p className="m-cine-text">{line.text}</p></div>
+              </div>
+            )}
+            <div className="m-row m-cine-btns">
+              <button className="m-btn gold" onClick={(e) => { e.stopPropagation(); send({ t: 'cnext' }); }}>Siguiente ▶</button>
+              {isHost && <button className="m-btn" onClick={(e) => { e.stopPropagation(); send({ t: 'cskip' }); }}>Saltar ⏭</button>}
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="m-screen m-cine" style={{ '--c': color }} onClick={() => send({ t: 'cnext' })}>
         {c.title && <div className="m-cine-title"><b>{c.title}</b>{c.sub && <span>{c.sub}</span>}</div>}
@@ -410,12 +443,14 @@ export default function ControllerApp() {
       {sensorCard}
       <div className="m-card">
         <div className="m-h">Pantalla en el celular</div>
-        <p className="m-small">Para quien no está frente al televisor: tu carrera se ve aquí mismo, con los botones encima. Gasta más batería.</p>
+        {noScreen
+          ? <p className="m-small warn-ok">No hay pantalla principal: la carrera se ve en cada celular. Si no quieres verla aquí, elige «Solo mando».</p>
+          : <p className="m-small">Para quien no está frente al televisor: tu carrera se ve aquí mismo, con los botones encima. Gasta más batería.</p>}
         <div className="m-seg">
-          <button className={!ctrl.view ? 'on' : ''} onClick={() => setCtrl((c) => ({ ...c, view: false }))}>Solo mando</button>
-          <button className={ctrl.view ? 'on' : ''} onClick={() => { getAudio().init(); setCtrl((c) => ({ ...c, view: true })); }}>Ver el juego aquí</button>
+          <button className={!viewOn ? 'on' : ''} onClick={() => setCtrl((c) => ({ ...c, view: false }))}>Solo mando</button>
+          <button className={viewOn ? 'on' : ''} onClick={() => { getAudio().init(); setCtrl((c) => ({ ...c, view: true })); }}>Ver el juego aquí</button>
         </div>
-        {ctrl.view && (
+        {viewOn && (
           <button className={'m-btn' + (ctrl.sound ? ' on' : '')} onClick={() => { getAudio().init(); setCtrl((c) => ({ ...c, sound: !c.sound })); }}>{ctrl.sound ? '🔊 Sonido en el celular' : '🔇 Sin sonido en el celular'}</button>
         )}
       </div>
@@ -453,29 +488,9 @@ function Msg({ title, text, spin, onClick }) {
   );
 }
 
-function PadBtn({ label, cls, onDown, onUp, children }) {
-  const active = useRef(new Set());
-  const down = (e) => {
-    e.preventDefault();
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (er) { /* nada */ }
-    active.current.add(e.pointerId);
-    e.currentTarget.classList.add('pressed');
-    if (navigator.vibrate) { try { navigator.vibrate(8); } catch (er) { /* nada */ } }
-    onDown && onDown();
-  };
-  const up = (e) => {
-    if (!active.current.has(e.pointerId)) return;
-    active.current.delete(e.pointerId);
-    if (active.current.size === 0) { e.currentTarget.classList.remove('pressed'); onUp && onUp(); }
-  };
-  return (
-    <button className={'pad-btn ' + (cls || '')} onPointerDown={down} onPointerUp={up} onPointerCancel={up} onContextMenu={(e) => e.preventDefault()}>
-      {children || label}
-    </button>
-  );
-}
+const trackCache = {};
 
-function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22, insetR = 0.22 }) {
+function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22, insetR = 0.22, className = 'pad-canvas' }) {
   const canvasRef = useRef(null);
   const pausedRef = useRef(paused);
   const [state, setState] = useState('loading');
@@ -487,10 +502,11 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22
     setState('loading');
     (async () => {
       try {
-        const [{ buildTrack }, { Renderer }, { MirrorSim }] = await Promise.all([import('../game/trackgfx'), import('../game/render'), import('../game/mirror')]);
+        const [{ buildTrack }, { Renderer, drawCinemaFx }, { MirrorSim }] = await Promise.all([import('../game/trackgfx'), import('../game/render'), import('../game/mirror')]);
         await new Promise((r) => setTimeout(r, 40));
         if (!alive) return;
-        const track = buildTrack(init.track);
+        if (!trackCache[init.track]) trackCache[init.track] = buildTrack(init.track);
+        const track = trackCache[init.track];
         if (!alive) return;
         const m = new MirrorSim(init, track);
         mirrorRef.current = m;
@@ -516,6 +532,12 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22
           last = now;
           if (!renderer || !m.snaps.length) return;
           m.advance(dt);
+          if (m.cinema) {
+            if (!m.cam) return;
+            renderer.render(m, [m.cam], { demo: true, cinema: true });
+            drawCinemaFx(renderer, m.fx);
+            return;
+          }
           const me = m.karts.find((k) => k.human && k.slot === slot) || m.karts.reduce((x, y) => (x.place < y.place ? x : y));
           renderer.render(m, [me], { paused: pausedRef.current, hudInset: renderer.inset });
         };
@@ -528,7 +550,7 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22
   }, [raceKey]);
   return (
     <>
-      <canvas ref={canvasRef} className="pad-canvas" />
+      <canvas ref={canvasRef} className={className} />
       {state !== 'ok' && <div className="view-loading">{state === 'error' ? 'No se pudo cargar la pista' : 'Cargando pista…'}</div>}
     </>
   );

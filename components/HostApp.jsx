@@ -7,6 +7,7 @@ import { sha256 } from '../game/sha256';
 import { getSprites, getShadowPortrait } from '../game/sprites';
 import { STORY_LEVELS } from '../game/story';
 import { fmtTime } from '../game/render';
+import { PadBtn, goFullscreen, keepAwake, usePortrait, useTilt } from './TouchControls';
 
 export default function HostApp() {
   const [unlocked, setUnlocked] = useState(null);
@@ -92,18 +93,58 @@ function Game() {
   }, [st && st.code]);
 
   const host = hostRef.current;
+  const solo = !!(st && st.local !== null && st.local !== undefined);
+  const portrait = usePortrait();
+  const tilt = useTilt();
+  const wakeRef = useRef(null);
+  const [steerMode, setSteerMode] = useState('buttons');
+
+  // sin pantalla principal: el dibujo se adapta a la forma de la pantalla del celular
+  useEffect(() => {
+    if (!host) return undefined;
+    const fit = () => {
+      if (!solo) { host.setViewSize(480, 270); return; }
+      const aspect = Math.max(1.3, Math.min(2.4, window.innerWidth / Math.max(1, window.innerHeight)));
+      host.setViewSize(Math.round((270 * aspect) / 2) * 2, 270);
+    };
+    fit();
+    const onR = () => setTimeout(fit, 120);
+    window.addEventListener('resize', onR);
+    return () => window.removeEventListener('resize', onR);
+  }, [host, solo]);
+
+  // el giro con el sensor del celular de J1 se manda al juego
+  useEffect(() => {
+    if (!host || !solo || steerMode !== 'tilt') return undefined;
+    const id = setInterval(() => { host.localIn.steer = tilt.ref.current.value; }, 33);
+    return () => clearInterval(id);
+  }, [host, solo, steerMode]);
+
+  const playHere = async () => {
+    host.addLocal();
+    await goFullscreen();
+    keepAwake(wakeRef);
+  };
+  const chooseSteer = async (mode) => {
+    if (mode === 'tilt') { const ok = await tilt.start(); setSteerMode(ok ? 'tilt' : 'buttons'); }
+    else { tilt.stop(); setSteerMode('buttons'); host.localIn.steer = 0; }
+  };
+
   return (
-    <div className="screen game">
+    <div className={'screen game' + (solo ? ' solo' : '')}>
       <div className="stage"><canvas ref={canvasRef} /></div>
-      {st && host && st.phase === 'lobby' && <Lobby st={st} host={host} qr={qr} url={url} portraits={portraits} />}
+      {st && host && solo && st.phase === 'race' && (
+        <HostPad host={host} st={st} steerMode={steerMode} tilt={tilt} portrait={portrait} items={items} />
+      )}
+      {st && host && st.phase === 'lobby' && <Lobby st={st} host={host} qr={qr} url={url} portraits={portraits} onPlayHere={playHere} steerMode={steerMode} onSteer={chooseSteer} tiltState={tilt.state} />}
       {st && host && st.phase === 'race' && st.paused && <Pause host={host} />}
       {st && host && st.phase === 'results' && <Results st={st} host={host} portraits={portraits} />}
       {st && host && st.phase === 'podium' && <Podium st={st} host={host} portraits={portraits} />}
       {st && host && st.phase === 'cinematic' && <Cinematic st={st} host={host} portraits={portraits} />}
       {st && host && st.phase === 'storyresult' && <StoryResult st={st} host={host} />}
       {st && host && st.phase === 'storyend' && <StoryEnd host={host} portraits={portraits} st={st} />}
-      {st && host && st.phase === 'race' && !st.paused && <button className="corner-btn" onClick={() => host.togglePause()} title="Pausa (Esc)">II</button>}
-      {st && host && (st.phase === 'race' || st.phase === 'cinematic') && <div className="turn-hint">📱↻ Gira el celular para ver el juego más grande</div>}
+      {st && host && st.phase === 'race' && !st.paused && !solo && <button className="corner-btn" onClick={() => host.togglePause()} title="Pausa (Esc)">II</button>}
+      {st && host && !solo && (st.phase === 'race' || st.phase === 'cinematic') && <div className="turn-hint">📱↻ Gira el celular para ver el juego más grande</div>}
     </div>
   );
 }
@@ -145,10 +186,12 @@ function ShareButton({ url, code }) {
   );
 }
 
-function Lobby({ st, host, qr, url, portraits }) {
+function Lobby({ st, host, qr, url, portraits, onPlayHere, steerMode, onSteer, tiltState }) {
   const n = st.players.filter(Boolean).length;
   const { cfg } = st;
   const touch = useTouch();
+  const solo = st.local !== null && st.local !== undefined;
+  const me = solo ? st.players[st.local] : null;
   return (
     <div className="overlay lobby">
       <div className="lobby-main">
@@ -163,7 +206,7 @@ function Lobby({ st, host, qr, url, portraits }) {
                     <img className="slot-face" src={portraits[p.char]} alt="" />
                     <div className="slot-info">
                       <div className="slot-name">{charById(p.char).name}</div>
-                      <div className="slot-meta">{p.kind === 'phone' ? (p.connected ? '📱 Celular' : '📱 Desconectado') : p.kind === 'kbA' ? '⌨ WASD' : '⌨ Flechas'}</div>
+                      <div className="slot-meta">{p.kind === 'local' ? '📱 Este celular' : p.kind === 'phone' ? (p.connected ? '📱 Celular' : '📱 Desconectado') : p.kind === 'kbA' ? '⌨ WASD' : '⌨ Flechas'}</div>
                       <div className="slot-power">{charById(p.char).powerName}</div>
                     </div>
                     <button className="slot-x" title="Quitar" onClick={() => host.removePlayer(i)}>✕</button>
@@ -184,10 +227,40 @@ function Lobby({ st, host, qr, url, portraits }) {
             </div>
             <div className="qr-help">Escanea con la cámara del celular. Si no, abre <b>{url.split('?')[0].replace(/^https?:\/\//, '')}</b> y escribe el código.</div>
             <ShareButton url={url} code={st.code} />
-            {touch && <div className="qr-note">Este dispositivo es la pantalla del juego. Para jugar, cada uno se conecta con su propio celular: escaneen el QR o compartan el link.</div>}
+            {touch && !solo && (
+              <>
+                <button className="btn gold play-here" onClick={onPlayHere}>🎮 Jugar en este celular</button>
+                <div className="qr-note">Sin televisor: tú juegas aquí como {SLOT_NAMES[st.players[0] ? st.players.findIndex((p) => !p) : 0] || 'J1'} y cada uno ve la carrera en su propio celular. Si hay TV, deja este dispositivo como pantalla.</div>
+              </>
+            )}
+            {solo && <div className="qr-note">Juegas en este celular como <b>{SLOT_NAMES[st.local]}</b>. Sin pantalla principal: la carrera se ve en el celular de cada jugador.</div>}
           </div>
         </div>
       </div>
+      {me && (
+        <div className="lobby-me" style={{ '--c': SLOT_COLORS[st.local] }}>
+          <div className="cfg-label">Tu personaje ({SLOT_NAMES[st.local]})</div>
+          <div className="me-chars">
+            {CHARACTERS.map((c) => {
+              const takenBy = st.players.findIndex((p, i) => p && i !== st.local && p.char === c.id);
+              return (
+                <button key={c.id} className={'me-char' + (me.char === c.id ? ' on' : '')} onClick={() => host.setLocalChar(c.id)}>
+                  <img src={portraits[c.id]} alt="" />
+                  <span>{c.name}</span>
+                  {takenBy >= 0 && <i style={{ background: SLOT_COLORS[takenBy] }}>{SLOT_NAMES[takenBy]}</i>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="me-power">Poder: <b>{charById(me.char).powerName}</b> — {charById(me.char).powerDesc}</div>
+          <div className="cfg-label">Cómo girar</div>
+          <div className="seg">
+            <button className={steerMode === 'buttons' ? 'on' : ''} onClick={() => onSteer('buttons')}>Flechas ◀ ▶</button>
+            <button className={steerMode === 'tilt' ? 'on' : ''} onClick={() => onSteer('tilt')}>Inclinar el celular</button>
+          </div>
+          {tiltState === 'none' && <div className="me-warn">Tu celular no envió datos del sensor. Se usarán las flechas.</div>}
+        </div>
+      )}
       <div className="lobby-bar">
         <div className="cfg-group">
           <div className="cfg-label">Modo</div>
@@ -383,6 +456,45 @@ function StoryEnd({ host, portraits, st }) {
         </div>
         <button className="btn gold" autoFocus onClick={() => host.next()}>Volver al lobby</button>
       </div>
+    </div>
+  );
+}
+
+function HostPad({ host, st, steerMode, tilt, portrait, items }) {
+  const [h, setH] = useState({});
+  useEffect(() => {
+    const id = setInterval(() => setH(host.localHud() || {}), 100);
+    return () => { clearInterval(id); host.localIn.brake = false; host.localIn.drift = false; if (steerMode !== 'tilt') host.localIn.steer = 0; };
+  }, [host]);
+  const li = host.localIn;
+  const dirs = useRef({ l: false, r: false });
+  const steer = (side, v) => () => { dirs.current[side] = v; li.steer = (dirs.current.r ? 1 : 0) - (dirs.current.l ? 1 : 0); };
+  const tiltOn = steerMode === 'tilt';
+  const driftCls = 'drift' + (h.drift === 2 ? ' lv2' : h.drift === 1 ? ' lv1' : '');
+  const driftBtn = <PadBtn cls={driftCls} onDown={() => { li.drift = true; }} onUp={() => { li.drift = false; }}>DERRAPE</PadBtn>;
+  return (
+    <div className={'pad view host-pad' + (tiltOn ? ' tilt' : '')} style={{ '--c': SLOT_COLORS[st.local] }}>
+      <div className="pad-col left">
+        {!tiltOn && <div className="pad-col-big">{driftBtn}</div>}
+        <PadBtn cls="item" onDown={() => host.localPress('item')}>OBJETO</PadBtn>
+        <PadBtn cls={'power' + (h.power >= 1 || h.charges > 0 ? ' ready' : '')} onDown={() => host.localPress('power')}>PODER</PadBtn>
+        <PadBtn cls="brake" onDown={() => { li.brake = true; }} onUp={() => { li.brake = false; }}>FRENO</PadBtn>
+      </div>
+      <div className="pad-mid">
+        <div className="view-top">
+          {tiltOn && <button className="view-btn" onClick={tilt.center} title="Centrar volante">◎</button>}
+          <button className="view-btn" onClick={() => host.togglePause()} title="Pausa">II</button>
+        </div>
+      </div>
+      <div className="pad-col right">
+        {tiltOn ? driftBtn : (
+          <div className="steer-btns">
+            <PadBtn cls="steer" onDown={steer('l', true)} onUp={steer('l', false)}>◀</PadBtn>
+            <PadBtn cls="steer" onDown={steer('r', true)} onUp={steer('r', false)}>▶</PadBtn>
+          </div>
+        )}
+      </div>
+      {portrait && <div className="rotate"><div className="rotate-ico">📱↻</div><p>Gira el celular en horizontal</p><small>Si la pantalla no gira, desactiva el bloqueo de rotación del celular.</small></div>}
     </div>
   );
 }
