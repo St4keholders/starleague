@@ -119,6 +119,7 @@ Objetos de las cajas: turbo de chile, mancha de aceite, bola de chicle, escudo b
 - **Android**: al elegir cómo girar, el mando pasa a pantalla completa y horizontal.
 - Si un celular se desconecta en plena carrera, su carro sigue solo hasta que vuelva a conectarse (abriendo el mismo link).
 - El juego no guarda partidas: es una sesión a la vez.
+- **Crear la sala desde un celular**: también funciona. El lobby se acomoda a la pantalla y trae el botón **Compartir link** para mandarlo por WhatsApp. Ese celular hace de pantalla del juego; los jugadores se conectan con sus propios celulares. Se ve mejor en horizontal.
 
 ## Estructura
 
