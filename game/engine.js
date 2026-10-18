@@ -1,7 +1,7 @@
 // Motor del anfitrión (pantalla del PC/TV)
 import { CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, CUP_POINTS, TRACK_NAMES, MODES, DIFFICULTIES } from './constants.js';
 import { Sim } from './sim.js';
-import { Renderer } from './render.js';
+import { Renderer, drawCinemaFx } from './render.js';
 import { buildTrack, THEMES } from './trackgfx.js';
 import { Audio, MENU_SONG, STORY_SONG, VILLAIN_SONG } from './audio.js';
 import { STORY_LEVELS, TIME_LIMITS } from './story.js';
@@ -60,6 +60,10 @@ export class GameHost {
     this.snapTimer = 0;
     this.sfxOut = [];
     this.raceInit = null;
+    // "sin pantalla principal": quien crea la sala también juega en este mismo dispositivo
+    this.localSlot = null;
+    this.localIn = { steer: 0, brake: false, drift: false };
+    this.viewSize = null;
 
     this.onKeyDown = this.onKeyDown.bind(this);
     this.onKeyUp = this.onKeyUp.bind(this);
@@ -88,6 +92,7 @@ export class GameHost {
       results: this.results, paused: this.paused, muted: this.audio.muted,
       raceName: this.sim ? this.sim.track.def.name : '',
       cine: this.cinema ? this.cinema.state() : null,
+      local: this.localSlot,
       story: this.storyInfo(),
       mode: this.sim ? this.sim.mode : null,
     };
@@ -155,13 +160,63 @@ export class GameHost {
   }
 
   hostSlot() {
+    if (this.localSlot !== null) return this.localSlot; // manda quien creó la sala
     const i = this.players.findIndex((p) => p && p.kind === 'phone' && p.connected);
     return i;
   }
 
+  // ---------------- jugar en el mismo dispositivo que crea la sala ----------------
+  addLocal() {
+    if (this.localSlot !== null || this.phase !== 'lobby') return;
+    let slot = this.players[0] ? this.players.findIndex((p) => !p) : 0;
+    if (slot < 0) return;
+    this.players[slot] = { slot, kind: 'local', char: this.freeChar(), connected: true };
+    this.localSlot = slot;
+    this.audio.init();
+    this.audio.sfx('join');
+    this.broadcastLobby();
+    this.changed();
+  }
+
+  setLocalChar(char) {
+    const p = this.localSlot !== null && this.players[this.localSlot];
+    if (!p || this.phase !== 'lobby' || !CHARACTERS.some((c) => c.id === char)) return;
+    p.char = char;
+    this.audio.sfx('select');
+    this.broadcastLobby();
+    this.changed();
+  }
+
+  localPress(what) {
+    if (this.localSlot === null) return;
+    const pd = this.pend[this.localSlot] || (this.pend[this.localSlot] = {});
+    pd[what] = true;
+  }
+
+  // tamaño del dibujo: 16:9 en el TV; en modo celular se adapta a la pantalla
+  setViewSize(w, h) {
+    const key = `${w}x${h}`;
+    if (this.viewSize === key) return;
+    this.viewSize = key;
+    this.renderer = new Renderer(this.canvas, w, h);
+    const t = this.sim ? this.sim.track : this.cinema ? this.cinema.track : this.demo ? this.demo.track : null;
+    if (t) this.renderer.setTrack(t);
+  }
+
+  localKart() {
+    if (this.localSlot === null || !this.sim) return null;
+    return this.sim.karts.find((k) => k.human && k.slot === this.localSlot) || null;
+  }
+
+  localHud() {
+    const k = this.localKart();
+    if (!k) return null;
+    return { drift: k.driftLevel, power: k.power, charges: k.charges, item: k.rouletteT > 0 ? '?' : k.item, started: this.sim.started };
+  }
+
   lobbyMsg(slot) {
     return {
-      t: 'lobby', you: slot, host: this.hostSlot() === slot, phase: this.phase,
+      t: 'lobby', you: slot, host: this.hostSlot() === slot, phase: this.phase, noScreen: this.localSlot !== null,
       players: this.players.map((p) => p && { kind: p.kind, char: p.char, connected: p.connected }),
       cfg: this.cfg,
       tracks: TRACK_NAMES,
@@ -193,7 +248,7 @@ export class GameHost {
       try { conn.send({ t: 'welcome', slot }); } catch (e) { /* nada */ }
       this.broadcastLobby();
       if (this.phase !== 'lobby') this.send(slot, this.phaseMsg(slot));
-      if (this.phase === 'race' && this.raceInit) this.send(slot, this.raceInit);
+      if ((this.phase === 'race' || this.phase === 'cinematic') && this.raceInit) this.send(slot, this.raceInit);
       this.changed();
       return;
     }
@@ -232,7 +287,7 @@ export class GameHost {
         break;
       case 'view':
         p.view = !!msg.on;
-        if (p.view && this.phase === 'race' && this.raceInit) this.send(slot, this.raceInit);
+        if (p.view && (this.phase === 'race' || this.phase === 'cinematic') && this.raceInit) this.send(slot, this.raceInit);
         break;
       case 'cnext':
         if (this.phase === 'cinematic') this.cineNext();
@@ -331,6 +386,7 @@ export class GameHost {
       setTimeout(() => { try { c.close(); } catch (e) { /* nada */ } }, 300);
     }
     this.players[slot] = null;
+    if (slot === this.localSlot) { this.localSlot = null; this.viewSize = null; this.renderer = new Renderer(this.canvas); if (this.demo) this.renderer.setTrack(this.demo.track); }
     this.broadcastLobby();
     this.changed();
   }
@@ -401,6 +457,10 @@ export class GameHost {
     this.cineVersion = -1;
     this.sim = null;
     this.renderer.setTrack(track);
+    // los celulares con vista de juego también ven la cinemática
+    this.raceInit = { ...raceInitMsg(this.cinema.scene, level.track), cinema: true };
+    this.broadcast(this.raceInit);
+    this.snapTimer = 0;
     this.phase = 'cinematic';
     this.paused = false;
     this.audio.playSong(STORY_SONG);
@@ -585,29 +645,31 @@ export class GameHost {
         }
       }
       if (this.sim) {
-        const views = this.sim.karts.filter((k) => k.human).sort((a, b) => a.slot - b.slot);
-        this.renderer.render(this.sim, views, { paused: this.paused });
+        const lk = this.localKart();
+        // sin pantalla principal: este dispositivo muestra solo a su jugador (los demás se ven en sus celulares)
+        const views = lk ? [lk] : this.sim.karts.filter((k) => k.human).sort((a, b) => a.slot - b.slot);
+        this.renderer.render(this.sim, views, { paused: this.paused, hudInset: lk ? [Math.round(this.renderer.W * 0.24), Math.round(this.renderer.W * 0.3)] : 0 });
       }
     } else if (this.phase === 'cinematic' && this.cinema) {
       const cin = this.cinema;
       cin.update(dt);
       if (cin.songCue) { this.audio.playSong(cin.songCue === 'villain' ? VILLAIN_SONG : STORY_SONG); cin.songCue = null; }
-      this.renderer.render(cin.scene, [cin.camera()], { demo: true, cinema: true });
-      const ctx = this.renderer.ctx, st = cin.shot;
-      if (st && st.tint) { ctx.fillStyle = st.tint; ctx.globalAlpha = 0.28; ctx.fillRect(0, 0, this.renderer.W, this.renderer.H); ctx.globalAlpha = 1; }
-      if (cin.baronHologram()) {
-        const img = this.renderer.sp.portraits.baron;
-        const W = this.renderer.W, sz = Math.round(this.renderer.H * 0.62);
-        const bob = Math.sin(performance.now() / 400) * 4;
-        ctx.save();
-        ctx.globalAlpha = 0.78 + Math.sin(performance.now() / 90) * 0.06;
-        ctx.shadowColor = '#b44dff'; ctx.shadowBlur = 18;
-        ctx.drawImage(img, Math.round(W / 2 - sz / 2), Math.round(4 + bob), sz, sz);
-        ctx.restore();
-        ctx.fillStyle = 'rgba(180,77,255,0.12)';
-        for (let y = 0; y < this.renderer.H * 0.65; y += 3) ctx.fillRect(0, y, W, 1);
+      const cam = cin.camera();
+      this.renderer.render(cin.scene, [cam], { demo: true, cinema: true });
+      const st = cin.shot;
+      const fx = { tint: st && st.tint ? st.tint : null, flash: cin.flashT, holo: cin.baronHologram() };
+      drawCinemaFx(this.renderer, fx);
+      this.snapTimer -= dt;
+      if (this.snapTimer <= 0) {
+        this.snapTimer = 1 / 30;
+        const viewers = this.viewers();
+        if (viewers.length) {
+          const snap = snapshotMsg(cin.scene, []);
+          snap.cam = [cam.camX, cam.camY, cam.camA, cam.camH === undefined ? -1 : cam.camH, cam.frameDist || 0, cam.camUp || 0].map((v) => Math.round(v * 1000) / 1000);
+          snap.fx = { tint: fx.tint, flash: Math.round(fx.flash * 100) / 100, holo: fx.holo ? 1 : 0 };
+          viewers.forEach((p) => this.send(p.slot, snap));
+        }
       }
-      if (cin.flashT > 0) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, cin.flashT * 1.6)})`; ctx.fillRect(0, 0, this.renderer.W, this.renderer.H); }
       if (cin.version !== this.cineVersion) {
         this.cineVersion = cin.version;
         const stt = cin.state();
@@ -633,6 +695,7 @@ export class GameHost {
       const pd = this.pend[k.slot] || {};
       let base;
       if (!p) base = { steer: 0, acc: false, brake: false, drift: false };
+      else if (p.kind === 'local') { const li = this.localIn; base = { steer: Math.max(-1, Math.min(1, li.steer || 0)), brake: !!li.brake, drift: !!li.drift }; }
       else if (p.kind === 'cpu') { k.autopilot = true; base = { steer: 0, acc: false, brake: false, drift: false }; }
       else if (p.kind === 'phone') {
         const m = this.phoneIn[k.slot];

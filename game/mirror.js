@@ -35,6 +35,8 @@ export class MirrorSim {
     this.story = init.story || null;
     this.stars = init.stars ? init.stars.map(([x, y]) => ({ x, y, taken: false })) : null;
     this.objectiveText = '';
+    this.cinema = !!init.cinema;
+    this.cam = null; this.fx = null;
     this.snaps = [];
     this.offset = null;
   }
@@ -80,6 +82,17 @@ export class MirrorSim {
     const span = s1.ts - s0.ts;
     const t = span > 0 ? Math.max(0, Math.min(1, (rt - s0.ts) / span)) : 1;
     this.time = Math.max(this.time, rt);
+    // cámara de cinemática (interpolada)
+    if (s1.cam) {
+      const c0 = s0.cam || s1.cam, c1 = s1.cam;
+      const L = (i) => c0[i] + (c1[i] - c0[i]) * t;
+      this.cam = {
+        camX: L(0), camY: L(1), camA: c0[2] + wrapAngle(c1[2] - c0[2]) * t,
+        camH: c1[3] < 0 ? undefined : L(3), frameDist: c1[4] || 0, camUp: c1[5] || 0,
+        x: L(0), y: L(1), z: 0,
+      };
+      this.fx = s1.fx || null;
+    }
     this.karts.forEach((k, i) => {
       const a = s0.k[i], b = s1.k[i];
       if (!a || !b) return;

@@ -42,6 +42,17 @@ Para cambiarla, calcula el SHA-256 de la nueva contraseña (por ejemplo en una t
 3. En el celular: elige personaje y cómo girar (**Flechas ◀ ▶** por defecto, o **Inclinar el celular**).
 4. El primer celular conectado (J1) elige el modo y toca **¡Empezar!** (también se puede con el mouse en el PC).
 
+### Jugar sin televisor (solo celulares)
+
+Para jugar en la calle o donde no haya pantalla:
+
+1. Uno abre el link en su celular, pone la contraseña y toca **🎮 Jugar en este celular**. Ese celular es J1: elige personaje y cómo girar ahí mismo.
+2. Los demás escanean el QR de ese celular o abren el link que se comparte con **📤 Compartir link**.
+3. Como no hay pantalla principal, **cada celular muestra su propia carrera** automáticamente (también las cinemáticas de la historia). Quien no quiera verla elige **Solo mando**.
+4. J1 elige el modo y toca **¡Empezar!**
+
+El celular de J1 lleva la partida: si cierra la página o cambia de app, el juego se pausa para todos. Se juega en horizontal.
+
 ### Ver el juego en el celular
 
 Para quien no está frente al televisor (o juega desde otro cuarto): en el lobby del mando elige **Ver el juego aquí**. Su carrera se dibuja en el propio celular, con los botones semitransparentes encima, y puede tener sonido en el celular. Durante la carrera se cambia entre vista y solo mando con el botón 🎮 / 📺.
@@ -119,7 +130,7 @@ Objetos de las cajas: turbo de chile, mancha de aceite, bola de chicle, escudo b
 - **Android**: al elegir cómo girar, el mando pasa a pantalla completa y horizontal.
 - Si un celular se desconecta en plena carrera, su carro sigue solo hasta que vuelva a conectarse (abriendo el mismo link).
 - El juego no guarda partidas: es una sesión a la vez.
-- **Crear la sala desde un celular**: también funciona. El lobby se acomoda a la pantalla y trae el botón **Compartir link** para mandarlo por WhatsApp. Ese celular hace de pantalla del juego; los jugadores se conectan con sus propios celulares. Se ve mejor en horizontal.
+- **Crear la sala desde un celular**: también funciona. El lobby se acomoda a la pantalla y trae el botón **Compartir link** para mandarlo por WhatsApp.
 
 ## Estructura
 
