@@ -21,8 +21,8 @@ export class MirrorSim {
     this.mode = init.mode;
     this.laps = init.laps;
     this.time = 0; this.raceTime = 0; this.started = false; this.countdown = 4.2; this.battleLeft = 0;
-    this.karts = init.karts.map(([char, human, slot, boss], i) => ({
-      id: i, char, ch: charById(char), human: !!human, slot, boss: boss || 0,
+    this.karts = init.karts.map(([char, human, slot, boss, skin, ally], i) => ({
+      id: i, char, ch: charById(char), human: !!human, slot, boss: boss || 0, skin: skin || null, ally: !!ally,
       x: 0, y: 0, z: 0, a: 0, camA: 0, spinVis: 0, drift: 0, driftLevel: 0,
       boostT: 0, surface: 'road', v: 0, invulnT: 0, spinT: 0, frozenT: 0, shieldT: 0, stickyT: 0,
       eliminated: false, balloons: 3, fallT: 0, place: i + 1, lap: 1, finished: false, finishTime: 0,
@@ -30,7 +30,7 @@ export class MirrorSim {
       message: '', messageT: 0, init: false,
     }));
     this.boxes = init.boxes.map(([x, y]) => ({ x, y, t: 0 }));
-    this.hazards = init.hazards.map(([type, period]) => ({ type, period, x: 0, y: 0, phase: 0 }));
+    this.hazards = init.hazards.map(([type, period, skin]) => ({ type, period, skin, x: 0, y: 0, phase: 0 }));
     this.projs = []; this.puddles = []; this.effects = []; this.parts = [];
     this.story = init.story || null;
     this.stars = init.stars ? init.stars.map(([x, y]) => ({ x, y, taken: false })) : null;
@@ -158,9 +158,9 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
 export function raceInitMsg(sim, trackIndex) {
   return {
     t: 'raceinit', track: trackIndex, mode: sim.mode, laps: sim.laps,
-    karts: sim.karts.map((k) => [k.char, k.human ? 1 : 0, k.slot, k.boss || 0]),
+    karts: sim.karts.map((k) => [k.char, k.human ? 1 : 0, k.slot, k.boss || 0, k.skin || '', k.ally ? 1 : 0]),
     boxes: sim.boxes.map((b) => [r1(b.x), r1(b.y)]),
-    hazards: sim.hazards.map((h) => [h.type, h.period || 0]),
+    hazards: sim.hazards.map((h) => [h.type, h.period || 0, h.skin || '']),
     stars: sim.stars ? sim.stars.map((s) => [r1(s.x), r1(s.y)]) : null,
     story: sim.story ? { type: sim.story.type, obj: sim.story.obj } : null,
   };

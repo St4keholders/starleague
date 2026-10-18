@@ -1,10 +1,10 @@
 // Motor del anfitrión (pantalla del PC/TV)
-import { CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, CUP_POINTS, TRACK_NAMES, MODES, DIFFICULTIES } from './constants.js';
+import { VILLAIN, CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, CUP_POINTS, TRACK_NAMES, MODES, DIFFICULTIES } from './constants.js';
 import { Sim } from './sim.js';
 import { Renderer, drawCinemaFx } from './render.js';
 import { buildTrack, THEMES } from './trackgfx.js';
-import { Audio, MENU_SONG, STORY_SONG, VILLAIN_SONG } from './audio.js';
-import { STORY_LEVELS, TIME_LIMITS } from './story.js';
+import { Audio, MENU_SONG, STORY_SONG, VILLAIN_SONG, ZORG_SONG } from './audio.js';
+import { TIME_LIMITS, STORIES, storyById } from './story.js';
 import { Cinema } from './cinema.js';
 import { peerOptionsFromURL, peerParamsString } from './peeropts.js';
 import { raceInitMsg, snapshotMsg } from './mirror.js';
@@ -27,8 +27,14 @@ function randCode() {
 }
 
 function loadCfg() {
-  try { const c = JSON.parse(localStorage.getItem('sl_cfg') || 'null'); if (c && typeof c === 'object') return { mode: 'copa', track: 0, diff: 1, level: 0, ...c }; } catch (e) { /* sin almacenamiento */ }
-  return { mode: 'copa', track: 0, diff: 1, level: 0 };
+  const def = { mode: 'copa', track: 0, diff: 1, level: 0, story: 1 };
+  try { const c = JSON.parse(localStorage.getItem('sl_cfg') || 'null'); if (c && typeof c === 'object') return { ...def, ...c }; } catch (e) { /* sin almacenamiento */ }
+  return def;
+}
+
+// personajes que se desbloquean al terminar una historia (se guarda en este dispositivo)
+function loadUnlocks() {
+  try { return JSON.parse(localStorage.getItem('sl_unlocks') || '[]'); } catch (e) { return []; }
 }
 
 export class GameHost {
@@ -39,6 +45,7 @@ export class GameHost {
     this.audio = new Audio();
     this.players = [null, null, null, null];
     this.cfg = loadCfg();
+    this.unlocks = loadUnlocks();
     this.phase = 'lobby';
     this.code = null;
     this.peerStatus = 'connecting';
@@ -88,6 +95,7 @@ export class GameHost {
     return {
       phase: this.phase, code: this.code, peerStatus: this.peerStatus, peerError: this.peerError,
       players: this.players.map((p) => p && { slot: p.slot, kind: p.kind, char: p.char, connected: p.connected }),
+      extra: this.playableIds().filter((id) => !CHARACTERS.some((c) => c.id === id)),
       cfg: { ...this.cfg }, cup: this.cup && { current: this.cup.current, total: this.cup.races.length, points: { ...this.cup.points } },
       results: this.results, paused: this.paused, muted: this.audio.muted,
       raceName: this.sim ? this.sim.track.def.name : '',
@@ -165,6 +173,20 @@ export class GameHost {
     return i;
   }
 
+  playableIds() {
+    const ids = CHARACTERS.map((c) => c.id);
+    if (this.unlocks.includes(VILLAIN.id)) ids.push(VILLAIN.id);
+    return ids;
+  }
+
+  unlock(id) {
+    if (!id || this.unlocks.includes(id)) return;
+    this.unlocks.push(id);
+    try { localStorage.setItem('sl_unlocks', JSON.stringify(this.unlocks)); } catch (e) { /* nada */ }
+  }
+
+  storyLevels(id) { return storyById(id || (this.storyRun ? this.storyRun.story : this.cfg.story)).levels; }
+
   // ---------------- jugar en el mismo dispositivo que crea la sala ----------------
   addLocal() {
     if (this.localSlot !== null || this.phase !== 'lobby') return;
@@ -180,7 +202,7 @@ export class GameHost {
 
   setLocalChar(char) {
     const p = this.localSlot !== null && this.players[this.localSlot];
-    if (!p || this.phase !== 'lobby' || !CHARACTERS.some((c) => c.id === char)) return;
+    if (!p || this.phase !== 'lobby' || !this.playableIds().includes(char)) return;
     p.char = char;
     this.audio.sfx('select');
     this.broadcastLobby();
@@ -220,7 +242,9 @@ export class GameHost {
       players: this.players.map((p) => p && { kind: p.kind, char: p.char, connected: p.connected }),
       cfg: this.cfg,
       tracks: TRACK_NAMES,
-      levels: STORY_LEVELS.map((l) => `${l.n}. ${l.title}`),
+      levels: this.storyLevels(this.cfg.story).map((l) => `${l.n}. ${l.title}`),
+      stories: STORIES.map((st) => ({ id: st.id, title: st.title, n: st.levels.length })),
+      extra: this.playableIds().filter((id) => !CHARACTERS.some((c) => c.id === id)),
     };
   }
   broadcastLobby() { this.broadcast((i) => this.lobbyMsg(i)); }
@@ -268,7 +292,7 @@ export class GameHost {
       }
       case 'pick':
         if (this.phase !== 'lobby') break;
-        if (CHARACTERS.some((c) => c.id === msg.char)) p.char = msg.char;
+        if (this.playableIds().includes(msg.char)) p.char = msg.char;
         this.audio.sfx('select');
         this.broadcastLobby(); this.changed();
         break;
@@ -309,7 +333,8 @@ export class GameHost {
     if (c.mode && MODES.some((m) => m.id === c.mode)) this.cfg.mode = c.mode;
     if (Number.isInteger(c.track) && c.track >= 0 && c.track < TRACK_NAMES.length) this.cfg.track = c.track;
     if (Number.isInteger(c.diff) && DIFFICULTIES.some((d) => d.id === c.diff)) this.cfg.diff = c.diff;
-    if (Number.isInteger(c.level) && c.level >= 0 && c.level < STORY_LEVELS.length) this.cfg.level = c.level;
+    if (Number.isInteger(c.story) && STORIES.some((st) => st.id === c.story) && c.story !== this.cfg.story) { this.cfg.story = c.story; this.cfg.level = 0; }
+    if (Number.isInteger(c.level) && c.level >= 0 && c.level < this.storyLevels(this.cfg.story).length) this.cfg.level = c.level;
     try { localStorage.setItem('sl_cfg', JSON.stringify(this.cfg)); } catch (e) { /* nada */ }
     this.audio.sfx('select');
     if (this.phase === 'lobby') this.startDemo();
@@ -400,7 +425,7 @@ export class GameHost {
   }
 
   startDemo() {
-    const idx = this.cfg.mode === 'batalla' ? 'arena' : this.cfg.mode === 'rapida' ? this.cfg.track : this.cfg.mode === 'historia' ? STORY_LEVELS[this.cfg.level || 0].track : 0;
+    const idx = this.cfg.mode === 'batalla' ? 'arena' : this.cfg.mode === 'rapida' ? this.cfg.track : this.cfg.mode === 'historia' ? (this.storyLevels(this.cfg.story)[this.cfg.level || 0] || this.storyLevels(this.cfg.story)[0]).track : 0;
     const t = this.getTrack(idx);
     this.demo = new Sim({ track: t, mode: idx === 'arena' ? 'battle' : 'race', humans: [], difficulty: 2, kartsTotal: idx === 'arena' ? 6 : 8, demo: true });
     this.demo.countdown = 0; this.demo.started = true; this.demo.demo = true;
@@ -420,7 +445,7 @@ export class GameHost {
       this.cup = { races: [0, 1, 2, 3, 4], current: 0, points: {}, bots: free };
     } else this.cup = null;
     if (this.cfg.mode === 'historia') {
-      this.storyRun = { level: this.cfg.level || 0 };
+      this.storyRun = { story: this.cfg.story || 1, level: Math.min(this.cfg.level || 0, this.storyLevels(this.cfg.story).length - 1) };
       this.startStoryLevel(true);
       return;
     }
@@ -429,12 +454,19 @@ export class GameHost {
   }
 
   // ---------------- modo historia ----------------
-  storyLevel() { return this.storyRun ? STORY_LEVELS[this.storyRun.level] : null; }
+  storyLevel() { return this.storyRun ? this.storyLevels()[this.storyRun.level] : null; }
+
+  // 'h0' = clon del personaje de J1
+  resolveChar(id) {
+    if (id === 'h0') return this.heroChars()[0] || 'pipo';
+    return id || null;
+  }
 
   storyInfo() {
     const l = this.storyLevel();
     if (!l) return null;
-    return { n: l.n, total: STORY_LEVELS.length, title: l.title, chapter: l.chapter, obj: l.obj, result: this.storyResult || null };
+    const st = storyById(this.storyRun.story);
+    return { story: st.id, storyTitle: st.title, end: st.end, n: l.n, total: st.levels.length, title: l.title, chapter: l.chapter, obj: l.obj, result: this.storyResult || null };
   }
 
   heroChars() {
@@ -449,16 +481,22 @@ export class GameHost {
   }
 
   playCinema(shots, level, onDone) {
-    const i = STORY_LEVELS.indexOf(level);
-    const nextBoss = STORY_LEVELS[i + 1] ? STORY_LEVELS[i + 1].boss : null;
+    const levels = this.storyLevels();
+    const i = levels.indexOf(level);
+    const next = levels[i + 1];
+    const src = level.boss ? level : next && next.boss ? next : level;
     const track = this.getTrack(level.track);
-    this.cinema = new Cinema({ track, shots, heroes: this.heroChars(), bossChar: level.boss || nextBoss || null });
+    this.cinema = new Cinema({
+      track, shots, heroes: this.heroChars(),
+      bossChar: this.resolveChar(src.boss), bossSkin: src.bossSkin,
+      allyChar: level.ally || null, rivalSkin: level.rivalSkin || null,
+    });
     this.cinemaDone = onDone;
     this.cineVersion = -1;
     this.sim = null;
     this.renderer.setTrack(track);
     // los celulares con vista de juego también ven la cinemática
-    this.raceInit = { ...raceInitMsg(this.cinema.scene, level.track), cinema: true };
+    this.raceInit = { ...raceInitMsg(this.cinema.scene, level.track), cinema: true, song: STORY_SONG };
     this.broadcast(this.raceInit);
     this.snapTimer = 0;
     this.phase = 'cinematic';
@@ -473,7 +511,11 @@ export class GameHost {
 
   advanceStory() {
     this.storyRun.level++;
-    if (this.storyRun.level >= STORY_LEVELS.length) {
+    if (this.storyRun.level >= this.storyLevels().length) {
+      const st = storyById(this.storyRun.story);
+      if (st.end && st.end.unlock) { this.unlock(st.end.unlock); this.broadcastLobby(); }
+      this.storyRun.level = this.storyLevels().length - 1;
+      this.storyResult = 'win';
       this.phase = 'storyend';
       this.sim = null;
       this.audio.playSong(STORY_SONG);
@@ -498,7 +540,8 @@ export class GameHost {
     this.players.forEach((p) => { if (p) p.late = false; });
     const humans = this.activePlayers().map((p) => ({ slot: p.slot, char: p.char }));
     const story = lvl ? {
-      type: lvl.type, boss: lvl.boss || null, goal: lvl.goal || 0, hits: lvl.hits || 0, target: lvl.target || 3, obj: lvl.obj,
+      type: lvl.type, boss: this.resolveChar(lvl.boss), bossSkin: lvl.bossSkin, ally: lvl.ally || null, rivalSkin: lvl.rivalSkin || null,
+      maxAhead: lvl.maxAhead, goal: lvl.goal || 0, hits: lvl.hits || 0, target: lvl.target || 3, obj: lvl.obj,
       time: lvl.type === 'time' ? (TIME_LIMITS[this.cfg.diff] || TIME_LIMITS[1]) : 0,
     } : null;
     this.cinema = null;
@@ -517,6 +560,7 @@ export class GameHost {
     this.broadcast((i) => this.phaseMsg(i));
     // datos fijos de la carrera para los celulares que muestran el juego
     this.raceInit = raceInitMsg(this.sim, idx);
+    this.raceInit.song = battle && !lvl ? 5 : THEMES[track.theme].music;
     this.sfxOut = [];
     this.broadcast(this.raceInit);
     this.changed();
@@ -653,11 +697,11 @@ export class GameHost {
     } else if (this.phase === 'cinematic' && this.cinema) {
       const cin = this.cinema;
       cin.update(dt);
-      if (cin.songCue) { this.audio.playSong(cin.songCue === 'villain' ? VILLAIN_SONG : STORY_SONG); cin.songCue = null; }
+      if (cin.songCue) { this.audio.playSong(cin.songCue === 'villain' ? VILLAIN_SONG : cin.songCue === 'zorg' ? ZORG_SONG : STORY_SONG); cin.songCue = null; }
       const cam = cin.camera();
       this.renderer.render(cin.scene, [cam], { demo: true, cinema: true });
       const st = cin.shot;
-      const fx = { tint: st && st.tint ? st.tint : null, flash: cin.flashT, holo: cin.baronHologram() };
+      const fx = { tint: st && st.tint ? st.tint : null, flash: cin.flashT, holo: cin.hologram() };
       drawCinemaFx(this.renderer, fx);
       this.snapTimer -= dt;
       if (this.snapTimer <= 0) {
@@ -666,7 +710,7 @@ export class GameHost {
         if (viewers.length) {
           const snap = snapshotMsg(cin.scene, []);
           snap.cam = [cam.camX, cam.camY, cam.camA, cam.camH === undefined ? -1 : cam.camH, cam.frameDist || 0, cam.camUp || 0].map((v) => Math.round(v * 1000) / 1000);
-          snap.fx = { tint: fx.tint, flash: Math.round(fx.flash * 100) / 100, holo: fx.holo ? 1 : 0 };
+          snap.fx = { tint: fx.tint, flash: Math.round(fx.flash * 100) / 100, holo: fx.holo || 0 };
           viewers.forEach((p) => this.send(p.slot, snap));
         }
       }

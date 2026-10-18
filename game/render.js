@@ -1,6 +1,6 @@
 // Render pseudo-3D estilo "modo 7" + sprites + HUD
 import { VIEW_W, VIEW_H, SLOT_COLORS, SLOT_NAMES, LAPS } from './constants.js';
-import { getSprites, getShadowFrames, KART_FRAMES, KART_SPRITE } from './sprites.js';
+import { getSprites, getShadowFrames, getAlienFrames, KART_FRAMES, KART_SPRITE } from './sprites.js';
 
 const FONT = '"Press Start 2P", monospace';
 const FOG0 = 620, FOG1 = 1350;
@@ -239,7 +239,7 @@ export class Renderer {
             ctx.beginPath(); ctx.ellipse(pg.sx, pg.sy, rr, rr * 0.35, 0, 0, Math.PI * 2); ctx.fill();
           });
           const p = this.proj(c, h.x, h.y, k * 280);
-          const fr = sp.fx.fire[Math.floor(time * 10) % 2];
+          const fr = (h.skin === 'meteor' ? sp.fx.meteor : sp.fx.fire)[Math.floor(time * 10) % 2];
           push(p ? { ...p, f: p.f - 1 } : null, () => this.billboard(fr.c, p, fr.w));
         }
       }
@@ -327,7 +327,7 @@ export class Renderer {
       }
     }
     if (k.invulnT > 0 && k.spinT <= 0 && k.frozenT <= 0 && Math.floor(sim.time * 16) % 2 === 0) return;
-    const frames = k.boss ? getShadowFrames(k.char) : this.sp.karts[k.char];
+    const frames = k.skin === 'shadow' ? getShadowFrames(k.char) : k.skin === 'alien' ? getAlienFrames(k.char) : this.sp.karts[k.char];
     let rel = (k.a + k.spinVis + (k.drift ? k.drift * 0.35 : 0)) - c.a;
     let fi = Math.round((rel / (Math.PI * 2)) * KART_FRAMES) % KART_FRAMES;
     if (fi < 0) fi += KART_FRAMES;
@@ -354,12 +354,12 @@ export class Renderer {
       }
     }
     // etiqueta de jefe
-    if (k.boss && k !== me && p.f < 900 && !this.noLabels) {
-      const label = sim.story && sim.story.type === 'chase' ? 'LADRÓN' : 'JEFE';
+    if ((k.boss || k.ally) && k !== me && p.f < 900 && !this.noLabels) {
+      const label = k.ally ? 'ALIADO' : sim.story && sim.story.type === 'chase' ? 'LADRÓN' : 'JEFE';
       ctx.font = `8px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
       const ly = Math.round(top - 6);
       ctx.fillStyle = '#000'; ctx.fillText(label, Math.round(cx) + 1, ly + 1);
-      ctx.fillStyle = Math.floor(sim.time * 4) % 2 ? '#d98aff' : '#b44dff'; ctx.fillText(label, Math.round(cx), ly);
+      ctx.fillStyle = k.ally ? '#ffd23f' : Math.floor(sim.time * 4) % 2 ? '#d98aff' : '#b44dff'; ctx.fillText(label, Math.round(cx), ly);
     }
     // etiqueta de jugador
     if (k.human && k !== me && p.f < 700 && !this.noLabels) {
@@ -524,15 +524,16 @@ export function drawCinemaFx(r, fx) {
   const ctx = r.ctx, W = r.W, H = r.H;
   if (fx.tint) { ctx.fillStyle = fx.tint; ctx.globalAlpha = 0.28; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   if (fx.holo) {
-    const img = r.sp.portraits.baron;
+    const img = r.sp.portraits[typeof fx.holo === 'string' ? fx.holo : 'baron'] || r.sp.portraits.baron;
     const sz = Math.round(H * 0.62);
     const bob = Math.sin(performance.now() / 400) * 4;
     ctx.save();
     ctx.globalAlpha = 0.78 + Math.sin(performance.now() / 90) * 0.06;
-    ctx.shadowColor = '#b44dff'; ctx.shadowBlur = 18;
+    const zorg = fx.holo === 'zorg';
+    ctx.shadowColor = zorg ? '#9dff3a' : '#b44dff'; ctx.shadowBlur = 18;
     ctx.drawImage(img, Math.round(W / 2 - sz / 2), Math.round(4 + bob), sz, sz);
     ctx.restore();
-    ctx.fillStyle = 'rgba(180,77,255,0.12)';
+    ctx.fillStyle = zorg ? 'rgba(157,255,58,0.12)' : 'rgba(180,77,255,0.12)';
     for (let y = 0; y < H * 0.65; y += 3) ctx.fillRect(0, y, W, 1);
   }
   if (fx.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, fx.flash * 1.6)})`; ctx.fillRect(0, 0, W, H); }

@@ -1,5 +1,5 @@
 // Generación procedural de sprites pixel art (sin descargar imágenes)
-import { CHARACTERS, VILLAIN } from './constants.js';
+import { CHARACTERS, VILLAIN, ZORG } from './constants.js';
 
 export function mkCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -177,6 +177,23 @@ function kartModel(ch) {
       v.box(-6, -5, 2, 3, 6, 8, '#e8342c');
       break;
     }
+    case 'zorg': {
+      // emperador alienígena: cabeza grande verde, tres ojos, antenas y casco dorado
+      v.box(-3, 1, -4, 4, 4, 9, '#2a6a1a');
+      v.box(-2, 0, -6, -5, 6, 9, '#3a8a2a'); v.box(-2, 0, 5, 6, 6, 9, '#3a8a2a');
+      v.sphere(-1, 0, 14, 5.6, '#6ad83a');
+      v.box(4, 4, -3, -2, 14, 15, '#ffffff'); v.box(4, 4, 2, 3, 14, 15, '#ffffff'); v.box(4, 4, 0, 0, 17, 18, '#ffffff');
+      v.set(5, -2, 14, '#111'); v.set(5, 2, 14, '#111'); v.set(5, 0, 17, '#111');
+      v.box(4, 4, -1, 1, 11, 11, '#1a4a10');
+      for (let a = 0; a < 22; a++) {
+        const yy = Math.round(Math.sin((a / 22) * Math.PI * 2) * 5), xx = Math.round(Math.cos((a / 22) * Math.PI * 2) * 5) - 1;
+        v.set(xx, yy, 18, '#ffd23f');
+      }
+      v.box(-2, -2, -3, -3, 19, 22, '#3a8a2a'); v.box(-2, -2, 3, 3, 19, 22, '#3a8a2a');
+      v.set(-2, -3, 23, '#ff4d5e'); v.set(-2, 3, 23, '#ff4d5e');
+      v.box(-9, -7, -6, 6, 4, 13, '#8a1a2a');
+      break;
+    }
     case 'baron': {
       // capa, máscara blanca, corona dorada y ojos que brillan
       v.box(-9, -6, -6, 6, 4, 14, '#4a1a6a');
@@ -197,6 +214,35 @@ function kartModel(ch) {
     default: break;
   }
   return v;
+}
+
+// versión "clon alienígena": verde brillante con borde lima
+export function alienify(src) {
+  const w = src.width, h = src.height;
+  const c = mkCanvas(w, h), x = c.getContext('2d');
+  x.drawImage(src, 0, 0);
+  const img = x.getImageData(0, 0, w, h), d = img.data;
+  const solid = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    if (d[i * 4 + 3] < 40) continue;
+    solid[i] = 1;
+    const lum = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3;
+    const t = Math.pow(lum / 255, 0.8);
+    if (lum > 205) { d[i * 4] = 255; d[i * 4 + 1] = 245; d[i * 4 + 2] = 120; }
+    else { d[i * 4] = Math.min(255, 10 + t * 120); d[i * 4 + 1] = Math.min(255, 40 + t * 215); d[i * 4 + 2] = Math.min(255, 20 + t * 70); }
+  }
+  for (let y = 0; y < h; y++) for (let xx = 0; xx < w; xx++) {
+    const i = y * w + xx;
+    if (solid[i]) continue;
+    let n = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const X = xx + dx, Y = y + dy;
+      if (X >= 0 && Y >= 0 && X < w && Y < h && solid[Y * w + X]) n++;
+    }
+    if (n) { d[i * 4] = 157; d[i * 4 + 1] = 255; d[i * 4 + 2] = 58; d[i * 4 + 3] = 200; }
+  }
+  x.putImageData(img, 0, 0);
+  return c;
 }
 
 // versión "sombra" de un sprite: oscuro, morado y con brillo alrededor
@@ -288,7 +334,7 @@ let cache = null;
 export function getSprites() {
   if (cache) return cache;
   const karts = {}, portraits = {};
-  for (const ch of [...CHARACTERS, VILLAIN]) {
+  for (const ch of [...CHARACTERS, VILLAIN, ZORG]) {
     const list = prepareVoxels(kartModel(ch));
     const frames = [];
     for (let f = 0; f < KART_FRAMES; f++) {
@@ -297,7 +343,7 @@ export function getSprites() {
     karts[ch.id] = frames;
     portraits[ch.id] = renderVox(list, Math.PI + 0.55, 72, 2.6, 36, 56, 0.3);
   }
-  cache = { karts, portraits, shadow: {}, shadowPortraits: {}, decor: makeDecor(), items: makeItemIcons(), fx: makeFx() };
+  cache = { karts, portraits, shadow: {}, shadowPortraits: {}, alien: {}, alienPortraits: {}, decor: makeDecor(), items: makeItemIcons(), fx: makeFx() };
   return cache;
 }
 
@@ -306,6 +352,16 @@ export function getShadowFrames(id) {
   const sp = getSprites();
   if (!sp.shadow[id]) sp.shadow[id] = id === VILLAIN.id ? sp.karts[id] : sp.karts[id].map(shadowify);
   return sp.shadow[id];
+}
+export function getAlienFrames(id) {
+  const sp = getSprites();
+  if (!sp.alien[id]) sp.alien[id] = sp.karts[id].map(alienify);
+  return sp.alien[id];
+}
+export function getAlienPortrait(id) {
+  const sp = getSprites();
+  if (!sp.alienPortraits[id]) sp.alienPortraits[id] = alienify(sp.portraits[id]);
+  return sp.alienPortraits[id];
 }
 export function getShadowPortrait(id) {
   const sp = getSprites();
@@ -316,7 +372,7 @@ export function getShadowPortrait(id) {
 // Solo retratos (para el celular)
 export function getPortraitURLs() {
   const out = {};
-  for (const ch of [...CHARACTERS, VILLAIN]) {
+  for (const ch of [...CHARACTERS, VILLAIN, ZORG]) {
     const list = prepareVoxels(kartModel(ch));
     out[ch.id] = renderVox(list, Math.PI + 0.55, 72, 2.6, 36, 56, 0.3).toDataURL();
   }
@@ -477,6 +533,63 @@ function makeDecor() {
     rect(x, 18, 4, 1, 10, '#b44dff');
     add('spike', c, 36);
   }
+  { // roca de los anillos
+    const c = mkCanvas(26, 18), x = c.getContext('2d');
+    ell(x, 13, 10, 12, 7, '#a07a4a'); ell(x, 11, 8, 8, 4, '#c29a62'); disc(x, 17, 11, 2, '#7a5a34'); disc(x, 8, 7, 1, '#e6c890');
+    add('ringrock', c, 34, 18);
+  }
+  { // satélite
+    const c = mkCanvas(34, 20), x = c.getContext('2d');
+    rect(x, 0, 6, 10, 8, '#2a6ad8'); rect(x, 24, 6, 10, 8, '#2a6ad8'); rect(x, 1, 7, 8, 1, '#7ff6ff'); rect(x, 25, 7, 8, 1, '#7ff6ff');
+    rect(x, 10, 9, 14, 2, '#9aa0ad'); disc(x, 17, 10, 5, '#d8dce6'); disc(x, 17, 10, 2, '#ff4d5e'); rect(x, 16, 1, 2, 5, '#9aa0ad');
+    add('satellite', c, 40, 50);
+  }
+  { // planta alienígena
+    const c = mkCanvas(30, 44), x = c.getContext('2d');
+    x.strokeStyle = '#1e6a48'; x.lineWidth = 3; x.beginPath(); x.moveTo(15, 44); x.quadraticCurveTo(8, 26, 15, 12); x.stroke();
+    ell(x, 15, 10, 9, 7, '#ff6ad8'); ell(x, 15, 10, 5, 4, '#ffd0f4'); disc(x, 15, 10, 2, '#9dff3a');
+    x.fillStyle = '#2a9466'; x.beginPath(); x.ellipse(7, 30, 7, 3, -0.6, 0, Math.PI * 2); x.fill(); x.beginPath(); x.ellipse(22, 24, 7, 3, 0.6, 0, Math.PI * 2); x.fill();
+    add('alienplant', c, 56);
+  }
+  { // hongo gigante
+    const c = mkCanvas(34, 38), x = c.getContext('2d');
+    rect(x, 13, 16, 8, 22, '#f0e0ff'); rect(x, 13, 16, 2, 22, '#ffffff');
+    ell(x, 17, 14, 16, 10, '#8a3ae0'); ell(x, 17, 12, 13, 7, '#a85af0');
+    disc(x, 10, 10, 2, '#9dff3a'); disc(x, 22, 9, 3, '#9dff3a'); disc(x, 16, 15, 2, '#9dff3a');
+    add('mushroom', c, 60);
+  }
+  { // espora flotante
+    const c = mkCanvas(14, 14), x = c.getContext('2d');
+    disc(x, 7, 7, 6, '#9dff3a'); disc(x, 7, 7, 4, '#e8ffb0'); rect(x, 5, 5, 2, 2, '#ffffff');
+    add('spore', c, 16, 40);
+  }
+  { // torre de la ciudad neón
+    const c = mkCanvas(30, 70), x = c.getContext('2d');
+    rect(x, 3, 6, 24, 64, '#16162e'); rect(x, 3, 6, 3, 64, '#22224a');
+    for (let y = 10; y < 66; y += 6) for (let i = 0; i < 4; i++) if ((y * 7 + i * 13) % 5 > 1) rect(x, 8 + i * 5, y, 3, 3, ['#ff2ea6', '#2ef0ff', '#ffd23f'][(y + i) % 3]);
+    rect(x, 13, 0, 4, 6, '#2ef0ff'); disc(x, 15, 1, 2, '#ff2ea6');
+    add('tower2', c, 100);
+  }
+  { // letrero de neón
+    const c = mkCanvas(36, 34), x = c.getContext('2d');
+    rect(x, 16, 16, 4, 18, '#2a2a46');
+    rect(x, 1, 1, 34, 16, '#0a0a18'); x.strokeStyle = '#ff2ea6'; x.lineWidth = 2; x.strokeRect(2, 2, 32, 14);
+    x.fillStyle = '#2ef0ff'; x.font = 'bold 9px monospace'; x.fillText('ZORG', 6, 12);
+    add('neonsign', c, 46);
+  }
+  { // graderías del coliseo
+    const c = mkCanvas(48, 34), x = c.getContext('2d');
+    for (let r = 0; r < 4; r++) { rect(x, r * 3, 26 - r * 8, 48 - r * 6, 8, r % 2 ? '#3a2456' : '#4a3070'); }
+    for (let i = 0; i < 40; i++) rect(x, 4 + (i * 11) % 40, 4 + ((i * 7) % 4) * 8, 2, 2, ['#9dff3a', '#7ff6ff', '#ff6ad8', '#ffd23f'][i % 4]);
+    add('stand', c, 90);
+  }
+  { // estatua de Zorg
+    const c = mkCanvas(30, 60), x = c.getContext('2d');
+    rect(x, 6, 48, 18, 12, '#6a6a7a'); rect(x, 10, 26, 10, 22, '#8a8aa0');
+    disc(x, 15, 16, 10, '#9a9ab0'); disc(x, 11, 15, 2, '#9dff3a'); disc(x, 19, 15, 2, '#9dff3a'); disc(x, 15, 11, 2, '#9dff3a');
+    rect(x, 7, 2, 2, 8, '#9a9ab0'); rect(x, 21, 2, 2, 8, '#9a9ab0'); disc(x, 8, 2, 2, '#ffd23f'); disc(x, 22, 2, 2, '#ffd23f');
+    add('zorgstatue', c, 80);
+  }
   return D;
 }
 
@@ -545,6 +658,13 @@ function makeFx() {
     rect(x, 8, 3, 1, 3, '#ff5a2a'); rect(x, 13, 3, 1, 3, '#ff5a2a'); rect(x, 8, 2, 1, 1, '#111'); rect(x, 13, 2, 1, 1, '#111');
     for (let i = 0; i < 3; i++) { rect(x, 5 + i * 2, 12 + (f + i) % 2, 1, 2, '#c83a1a'); rect(x, 15 + i * 2, 12 + (f + i + 1) % 2, 1, 2, '#c83a1a'); }
     F.crab.push({ c: outline(c), w: 26 });
+  }
+  F.meteor = [];
+  for (let f = 0; f < 2; f++) {
+    const c = mkCanvas(20, 24), x = c.getContext('2d');
+    x.fillStyle = f ? '#ffb02e' : '#ff7a1a'; x.beginPath(); x.moveTo(4, 2); x.lineTo(16, 2); x.lineTo(14, 14); x.lineTo(6, 14); x.fill();
+    disc(x, 10, 16, 7, '#5a3a2a'); disc(x, 8, 14, 3, '#7a5a44'); disc(x, 13, 18, 2, '#3a2418');
+    F.meteor.push({ c: outline(c, '#2a0a00'), w: 30 });
   }
   F.fire = [];
   for (let f = 0; f < 2; f++) {

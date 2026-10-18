@@ -79,6 +79,14 @@ export const VILLAIN = {
   power: 'rayo', powerName: 'Eclipse', powerDesc: 'Rayo oscuro sobre el que va primero',
 };
 
+// Emperador del Torneo Galáctico (Historia 2)
+export const ZORG = {
+  id: 'zorg', name: 'Zorg', full: 'Zorg el Invicto',
+  kart: '#d8b02a', trim: '#6ad83a',
+  stats: { speed: 4, accel: 4, handling: 4, weight: 4 },
+  power: 'rayo', powerName: 'Rayo cósmico', powerDesc: 'Cae sobre el que va primero',
+};
+
 export const ITEMS = {
   chile: { name: 'Turbo de chile' },
   aceite: { name: 'Mancha de aceite' },
@@ -101,16 +109,22 @@ export const DIFFICULTIES = [
   { id: 2, name: 'Difícil' },
 ];
 
-export const TRACK_NAMES = ['Pradera Molinos', 'Playa Coral', 'Cumbre Nevada', 'Volcán Fortaleza', 'Senda Estelar', 'Fortaleza Eclipse'];
+export const TRACK_NAMES = ['Pradera Molinos', 'Playa Coral', 'Cumbre Nevada', 'Volcán Fortaleza', 'Senda Estelar', 'Fortaleza Eclipse', 'Anillos de Saturnia', 'Jungla Gloop', 'Ciudad Neón', 'Coliseo de Zorg'];
 export const CUP_TRACKS = [0, 1, 2, 3, 4];
 export const ARENA_NAME = 'Arena Cometa';
 
 export function charById(id) {
   if (id === VILLAIN.id) return VILLAIN;
+  if (id === ZORG.id) return ZORG;
   return CHARACTERS.find((c) => c.id === id) || CHARACTERS[0];
 }
 
 // nombre del jefe en versión sombra
+export function cloneName(id) {
+  if (id === ZORG.id) return ZORG.full;
+  return `Clon de ${charById(id).name}`;
+}
+
 export function shadowName(id) {
   if (id === VILLAIN.id) return VILLAIN.name;
   const c = charById(id);

@@ -4,8 +4,8 @@ import QRCode from 'qrcode';
 import { GameHost, peerParamsString } from '../game/engine';
 import { PASSWORD_HASH, CHARACTERS, MODES, DIFFICULTIES, TRACK_NAMES, SLOT_COLORS, SLOT_NAMES, charById, GAME_NAME } from '../game/constants';
 import { sha256 } from '../game/sha256';
-import { getSprites, getShadowPortrait } from '../game/sprites';
-import { STORY_LEVELS } from '../game/story';
+import { getSprites, getShadowPortrait, getAlienPortrait } from '../game/sprites';
+import { STORIES, storyById } from '../game/story';
 import { fmtTime } from '../game/render';
 import { PadBtn, goFullscreen, keepAwake, usePortrait, useTilt } from './TouchControls';
 
@@ -77,7 +77,7 @@ function Game() {
     setSt(host.snapshot());
     const sp = getSprites();
     const p = {}; for (const id in sp.portraits) p[id] = sp.portraits[id].toDataURL();
-    for (const id in sp.portraits) { try { p[`shadow-${id}`] = getShadowPortrait(id).toDataURL(); } catch (e) { /* nada */ } }
+    for (const id in sp.portraits) { try { p[`shadow-${id}`] = getShadowPortrait(id).toDataURL(); p[`alien-${id}`] = getAlienPortrait(id).toDataURL(); } catch (e) { /* nada */ } }
     const it = {}; for (const id in sp.items) it[id] = sp.items[id].toDataURL();
     setPortraits(p); setItems(it);
     const unlock = () => { host.audio.init(); if (host.phase === 'lobby' && host.audio.song === -1) host.audio.playSong(6); };
@@ -241,7 +241,7 @@ function Lobby({ st, host, qr, url, portraits, onPlayHere, steerMode, onSteer, t
         <div className="lobby-me" style={{ '--c': SLOT_COLORS[st.local] }}>
           <div className="cfg-label">Tu personaje ({SLOT_NAMES[st.local]})</div>
           <div className="me-chars">
-            {CHARACTERS.map((c) => {
+            {[...CHARACTERS, ...(st.extra || []).map(charById)].map((c) => {
               const takenBy = st.players.findIndex((p, i) => p && i !== st.local && p.char === c.id);
               return (
                 <button key={c.id} className={'me-char' + (me.char === c.id ? ' on' : '')} onClick={() => host.setLocalChar(c.id)}>
@@ -277,12 +277,20 @@ function Lobby({ st, host, qr, url, portraits, onPlayHere, steerMode, onSteer, t
           </div>
         )}
         {cfg.mode === 'historia' && (
-          <div className="cfg-group">
-            <div className="cfg-label">Empezar en</div>
-            <select className="sel" value={cfg.level || 0} onChange={(e) => host.setCfg({ level: Number(e.target.value) })}>
-              {STORY_LEVELS.map((l, i) => <option key={l.n} value={i}>{l.n}. {l.title} · {l.chapter.split('·')[1] || l.chapter}</option>)}
-            </select>
-          </div>
+          <>
+            <div className="cfg-group">
+              <div className="cfg-label">Historia</div>
+              <div className="seg">
+                {STORIES.map((h) => <button key={h.id} className={(cfg.story || 1) === h.id ? 'on' : ''} onClick={() => host.setCfg({ story: h.id })} title={`${h.levels.length} niveles`}>{h.id}. {h.title}</button>)}
+              </div>
+            </div>
+            <div className="cfg-group">
+              <div className="cfg-label">Empezar en</div>
+              <select className="sel" value={cfg.level || 0} onChange={(e) => host.setCfg({ level: Number(e.target.value) })}>
+                {storyById(cfg.story || 1).levels.map((l, i) => <option key={l.n} value={i}>{l.n}. {l.title} · {l.chapter.split('·')[1] || l.chapter}</option>)}
+              </select>
+            </div>
+          </>
         )}
         <div className="cfg-group">
           <div className="cfg-label">Rivales</div>
@@ -391,7 +399,8 @@ function Cinematic({ st, host, portraits }) {
   const c = st.cine;
   if (!c || c.done) return <div className="overlay cine"><div className="bar top" /><div className="bar bottom" /></div>;
   const line = c.line;
-  const face = line && line.char ? portraits[line.shadow ? `shadow-${line.char}` : line.char] : null;
+  const skin = line && (line.skin || (line.shadow ? 'shadow' : null));
+  const face = line && line.char ? portraits[skin ? `${skin}-${line.char}` : line.char] : null;
   return (
     <div className="overlay cine" onClick={() => { if (!(host.cineHook && host.cineHook())) host.cineNext(); }}>
       <div className="bar top" />
@@ -404,7 +413,7 @@ function Cinematic({ st, host, portraits }) {
         </div>
       )}
       {line && (
-        <div className={'cine-box' + (line.char === 'baron' ? ' villain' : line.shadow ? ' shadow' : '')}>
+        <div className={'cine-box' + (line.char === 'zorg' || skin === 'alien' ? ' alien' : line.char === 'baron' ? ' villain' : skin === 'shadow' ? ' shadow' : '')}>
           <div className="cine-face">{face ? <img src={face} alt="" /> : <span>★</span>}</div>
           <div className="cine-text">
             <div className="cine-name">{line.name}</div>
@@ -443,15 +452,17 @@ function StoryResult({ st, host }) {
 
 function StoryEnd({ host, portraits, st }) {
   const heroes = st.players.filter(Boolean).map((p) => p.char);
+  const info = st.story || {};
+  const end = info.end || { title: '¡Historia completada!', text: '' };
   return (
     <div className="overlay center story-end">
       <div className="card podium">
-        <div className="end-star">★</div>
-        <h2>¡La Estrella Madre volvió a brillar!</h2>
-        <p className="story-obj">Recuperaron los cinco fragmentos y derrotaron al Barón Eclipse.</p>
-        <div className="end-heroes">{heroes.map((c, i) => <img key={i} src={portraits[c]} alt="" />)}</div>
+        <div className="end-star">{info.story === 2 ? '🏆' : '★'}</div>
+        <h2>{end.title}</h2>
+        <p className="story-obj">{end.text}</p>
+        <div className="end-heroes">{heroes.map((c, i) => <img key={i} src={portraits[c]} alt="" />)}{end.unlock && portraits[end.unlock] && <img className="unlocked" src={portraits[end.unlock]} alt="" />}</div>
         <div className="credits">
-          <div>STAR LEAGUE · El Robo de las Estrellas</div>
+          <div>STAR LEAGUE · {info.storyTitle || ''}</div>
           <div>Un juego para jugar en familia</div>
         </div>
         <button className="btn gold" autoFocus onClick={() => host.next()}>Volver al lobby</button>

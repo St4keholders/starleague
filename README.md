@@ -4,8 +4,8 @@ Juego de carreras retro (pixel art, cámara detrás del carro estilo 16 bits) pa
 
 - Hasta **4 jugadores** en pantalla dividida + bots hasta completar 8 corredores.
 - **8 personajes**, cada uno con su poder.
-- **6 pistas**: Pradera Molinos, Playa Coral, Cumbre Nevada, Volcán Fortaleza, Senda Estelar y Fortaleza Eclipse.
-- **Modos**: Historia (10 niveles con cinemáticas), Copa (5 pistas con puntos y podio), Carrera rápida y Batalla de globos.
+- **10 pistas**: Pradera Molinos, Playa Coral, Cumbre Nevada, Volcán Fortaleza, Senda Estelar, Fortaleza Eclipse, Anillos de Saturnia, Jungla Gloop, Ciudad Neón y Coliseo de Zorg.
+- **Modos**: Historia 1 (10 niveles) e Historia 2 (7 niveles) con cinemáticas, Copa (5 pistas con puntos y podio), Carrera rápida y Batalla de globos.
 - **Manejo automático**: el carro acelera solo; tú giras, derrapas, usas objetos y frenas.
 - **Derrape con mini turbo** y objetos en cajas.
 - Todo el arte y la música se generan con código: no descarga imágenes ni audio, consume muy pocos datos.
@@ -85,7 +85,11 @@ El carro **acelera solo** y la caja es automática.
 - **J con flechas** (↑ para unirse): ←/→ gira, ↓ frena, Shift derecho derrapa, `-` objeto, `.` poder.
 - `M` silencia el sonido. `Enter` empieza la partida o continúa.
 
-## Modo historia: El Robo de las Estrellas
+## Modo historia
+
+En el lobby, al elegir **Historia**, se escoge **Historia 1** o **Historia 2** y el nivel donde empezar.
+
+### Historia 1: El Robo de las Estrellas
 
 El Barón Eclipse rompió la Estrella Madre en cinco fragmentos y los escondió en los cinco mundos. Hay 10 niveles, y antes y después de cada uno hay una cinemática. En las cinemáticas hablan los personajes que eligieron los jugadores.
 
@@ -107,6 +111,24 @@ El Barón Eclipse rompió la Estrella Madre en cinco fragmentos y los escondió 
 - **Sin guardado:** la historia no se guarda (unos 25 a 35 minutos de una sentada), pero en el lobby se puede **empezar en cualquier nivel**.
 - **Cinemáticas:** avanzan con Enter, clic o *Siguiente* en el celular. *Saltar* (Esc en el PC) solo lo tiene J1 en el celular.
 - **Dificultad:** la de *Rivales* en el lobby cambia la velocidad de los jefes y el tiempo del contrarreloj.
+
+### Historia 2: El Torneo Galáctico
+
+Zorg el Invicto invita a los corredores a su torneo galáctico… pero hace trampa con **clones alienígenas** de los campeones. El Barón Eclipse, ya reformado, se une al equipo.
+
+| Etapa | Pista | Objetivo |
+| --- | --- | --- |
+| 1 | Senda Estelar | Terminar entre los 3 primeros |
+| 2 | Anillos de Saturnia *(nueva)* | **Eliminación**: cada vez que el líder completa una vuelta salen los dos últimos |
+| 3 | Jungla Gloop *(nueva)* | Recoger 12 cristales entre todos (cuidado con la baba que frena) |
+| 4 | Ciudad Neón *(nueva)* | **Proteger al Barón**: máximo 1 clon puede llegar antes que él |
+| 5 | Volcán Fortaleza | Persecución: alcanzar 3 veces al Clon de Chispa |
+| 6 | Fortaleza Eclipse | Jefe: ¡el clon de tu propio personaje (J1)! |
+| 7 | Coliseo de Zorg *(nueva)* | Final contra **Zorg el Invicto** (3 vueltas, con meteoritos) |
+
+Al terminarla, **el Barón Eclipse queda desbloqueado** como personaje en todos los modos. El desbloqueo se guarda en el dispositivo que crea la sala (PC o celular de J1).
+
+Las 4 pistas nuevas también están en **Carrera rápida**.
 
 ## Personajes
 
