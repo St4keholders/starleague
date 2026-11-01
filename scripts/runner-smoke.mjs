@@ -66,6 +66,41 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   assert(k.eliminated && k.elimReason === 'vidas', 'Al llegar a 0 corazones debe quedar eliminado por vidas');
 }
 
+// 2.6 Verificar recogibles (corazón, escudo, caja) y que el corazón no pasa de 3
+{
+  const sim = new RunnerSim({ seed: 456, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
+  sim.started = true;
+  const k = sim.karts[0];
+  let heartPk = null, shieldPk = null, boxPk = null;
+  for (let ci = 3; ci < 80; ci++) {
+    const ch = sim.world.getChunk(ci);
+    for (const pk of ch.pickups) {
+      if (pk.type === 'heart' && !heartPk) heartPk = pk;
+      if (pk.type === 'shield' && !shieldPk) shieldPk = pk;
+      if (pk.type === 'box' && !boxPk) boxPk = pk;
+    }
+    if (heartPk && shieldPk && boxPk) break;
+  }
+  assert(heartPk && shieldPk && boxPk, 'Deben generarse recogibles heart, shield y box');
+  // Corazón con 2 vidas -> sube a 3 y se marca en taken
+  k.hearts = 2; k.x = heartPk.x; k.y = heartPk.y; k.z = 0;
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 3 && sim.taken.has(heartPk.id), 'El corazón debe curar a 3 y marcarse en taken');
+  // Corazón con 3 vidas -> no pasa de 3 y da mini-turbo
+  sim.taken.delete(heartPk.id);
+  k.boostT = 0; k.x = heartPk.x; k.y = heartPk.y;
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 3 && k.boostT > 0, 'Con 3 corazones no debe pasar de 3 y debe dar turbo');
+  // Escudo -> activa shieldT = 8
+  k.x = shieldPk.x; k.y = shieldPk.y;
+  sim.bounds(k, 1 / 60);
+  assert(k.shieldT >= 7.9 && sim.taken.has(shieldPk.id), 'El escudo debe activar shieldT y desaparecer');
+  // Caja -> inicia ruleta de objeto
+  k.item = null; k.rouletteT = 0; k.x = boxPk.x; k.y = boxPk.y;
+  sim.bounds(k, 1 / 60);
+  assert(k.rouletteT > 0 && sim.taken.has(boxPk.id), 'La caja debe iniciar ruleta y desaparecer');
+}
+
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades
 console.log('3) Simulando partidas automáticas (10 semillas × 3 dificultades)...');
 const MATCH_SEEDS = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];

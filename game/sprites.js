@@ -723,6 +723,26 @@ function makeDecor() {
     disc(x, 17, 15, 2, '#3a4048');
     add('windmill2', c, 60);
   }
+  { // corazón rojo brillante flotando (heart, recogible)
+    const c = mkCanvas(20, 18), x = c.getContext('2d');
+    disc(x, 6, 6, 5, '#ff2e4c');
+    disc(x, 14, 6, 5, '#ff2e4c');
+    x.fillStyle = '#ff2e4c';
+    x.beginPath(); x.moveTo(1, 7); x.lineTo(10, 17); x.lineTo(19, 7); x.closePath(); x.fill();
+    disc(x, 6, 5, 3, '#ff6880');
+    rect(x, 4, 4, 2, 2, '#ffffff');
+    add('heart', c, 18, 10);
+  }
+  { // burbuja azul con brillo (shieldpick, recogible)
+    const c = mkCanvas(20, 20), x = c.getContext('2d');
+    disc(x, 10, 10, 8, '#2898ff');
+    disc(x, 10, 10, 6, '#6ad2ff');
+    disc(x, 9, 9, 4, '#b8f2ff');
+    rect(x, 6, 5, 3, 2, '#ffffff');
+    rect(x, 5, 7, 2, 2, '#ffffff');
+    rect(x, 13, 13, 2, 2, '#ffffff');
+    add('shieldpick', c, 20, 10);
+  }
   return D;
 }
 

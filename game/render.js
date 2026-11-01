@@ -213,9 +213,24 @@ export class Renderer {
     const time = sim.time;
     const push = (p, draw) => { if (p && p.sx > -80 && p.sx < c.vp.w + 80) list.push({ f: p.f, p, draw }); };
 
-    // decoración
+    // decoración y recogibles
+    const bf = sp.fx.box[Math.floor(time * 6) % 4];
     const decorList = t.runner ? t.visibleDecor(c, sim) : t.decor;
     for (const d of decorList) {
+      if (d.type === 'box' || d.kind === 'box') {
+        const z = 7 + Math.sin(time * 3 + d.x * 0.1) * 2.5;
+        const p = this.proj(c, d.x, d.y, z);
+        if (p) push(p, () => { this.shadow(p, c, d.x, d.y, 8); this.billboard(bf.c, p, bf.w); });
+        continue;
+      }
+      if (d.type === 'heart' || d.type === 'shield') {
+        const spec = sp.decor[d.kind];
+        if (!spec) continue;
+        const z = (spec.float || 10) + Math.sin(time * 4 + d.x * 0.1) * 3;
+        const p = this.proj(c, d.x, d.y, z);
+        if (p) push(p, () => { this.shadow(p, c, d.x, d.y, 7); this.billboard(spec.c, p, spec.w); });
+        continue;
+      }
       const kind = d.kind === 'pumpkin' && d.lit ? 'pumpkin_lit' : d.kind;
       const spec = sp.decor[kind] || sp.decor[d.kind];
       if (!spec) continue;
@@ -224,7 +239,6 @@ export class Renderer {
       push(p, () => this.billboard(spec.c, p, spec.w, d.kind === 'starcrystal' || d.kind === 'asteroid' ? Math.sin(time * 2 + d.x) * 4 * p.s : 0));
     }
     // cajas
-    const bf = sp.fx.box[Math.floor(time * 6) % 4];
     for (const b of sim.boxes) {
       if (b.t > 0) continue;
       const z = 7 + Math.sin(time * 3 + b.x * 0.1) * 2.5;

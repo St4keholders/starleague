@@ -9,6 +9,11 @@ import {
   BIOME_TRANSITION,
   BIOMES,
   DIFF_OBS_DENSITY,
+  HEART_SPACING,
+  SHIELD_SPACING,
+  BOOST_SPACING,
+  BOX_ROW_SPACING,
+  BOX_ROW_COUNT,
 } from './config.js';
 
 const seedParamsCache = new Map();
@@ -214,6 +219,86 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
         break;
       }
       void placed;
+    }
+
+    // Franja de turbo en el piso (~1 cada BOOST_SPACING = 900 u)
+    if (rng() < CHUNK_LEN / BOOST_SPACING) {
+      const by = Math.round((y0 + 36 + rng() * (CHUNK_LEN - 96)) * 10) / 10;
+      const cxy = centerX(seed, by);
+      const hwy = halfW(seed, by);
+      const bx = Math.round((cxy + (rng() * 2 - 1) * (hwy - 70)) * 10) / 10;
+      if (!overlapsExisting(bx, by + 32, 34, obstacles, 10)) {
+        zones.push({
+          id: mkId('z'),
+          type: 'boost',
+          x0: Math.round((bx - 30) * 10) / 10,
+          x1: Math.round((bx + 30) * 10) / 10,
+          y0: by,
+          y1: Math.round((by + 64) * 10) / 10,
+        });
+      }
+    }
+
+    // Corazón (~1 cada HEART_SPACING = 2.500 u)
+    if (rng() < CHUNK_LEN / HEART_SPACING) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const py = Math.round((y0 + 30 + rng() * (CHUNK_LEN - 60)) * 10) / 10;
+        const cxy = centerX(seed, py);
+        const hwy = halfW(seed, py);
+        const px = Math.round((cxy + (rng() * 2 - 1) * (hwy - 48)) * 10) / 10;
+        if (overlapsExisting(px, py, 16, obstacles, 12)) continue;
+        pickups.push({
+          id: mkId('pk'),
+          type: 'heart',
+          kind: 'heart',
+          x: px,
+          y: py,
+          r: 18,
+        });
+        break;
+      }
+    }
+
+    // Escudo (~1 cada SHIELD_SPACING = 1.800 u)
+    if (rng() < CHUNK_LEN / SHIELD_SPACING) {
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const py = Math.round((y0 + 30 + rng() * (CHUNK_LEN - 60)) * 10) / 10;
+        const cxy = centerX(seed, py);
+        const hwy = halfW(seed, py);
+        const px = Math.round((cxy + (rng() * 2 - 1) * (hwy - 48)) * 10) / 10;
+        if (overlapsExisting(px, py, 16, obstacles, 12)) continue;
+        pickups.push({
+          id: mkId('pk'),
+          type: 'shield',
+          kind: 'shieldpick',
+          x: px,
+          y: py,
+          r: 18,
+        });
+        break;
+      }
+    }
+
+    // Fila de 4 cajas de objetos (~1 fila cada BOX_ROW_SPACING = 1.200 u)
+    const boxPeriod = Math.max(3, Math.round(BOX_ROW_SPACING / CHUNK_LEN));
+    if (chunkIndex % boxPeriod === 2) {
+      const by = Math.round((y0 + CHUNK_LEN * 0.5) * 10) / 10;
+      const cxy = centerX(seed, by);
+      const hwy = halfW(seed, by);
+      const span = Math.min(240, hwy * 0.65);
+      for (let bi = 0; bi < BOX_ROW_COUNT; bi++) {
+        const t = BOX_ROW_COUNT > 1 ? bi / (BOX_ROW_COUNT - 1) - 0.5 : 0;
+        const bx = Math.round((cxy + t * span * 2) * 10) / 10;
+        if (overlapsExisting(bx, by, 14, obstacles, 6)) continue;
+        pickups.push({
+          id: mkId('pk'),
+          type: 'box',
+          kind: 'box',
+          x: bx,
+          y: by,
+          r: 18,
+        });
+      }
     }
   }
 

@@ -173,6 +173,37 @@ export class RunnerWorld {
       }
     }
 
+    // Pintar zonas (turbos en el piso, etc.)
+    const boostBg = toU32('#ff4d2e');
+    const boostChv = toU32('#ffe45c');
+    const boostRim = toU32('#2ef0ff');
+    const boostDark = toU32('#1e122a');
+    for (const z of chunk.zones) {
+      if (z.type === 'boost') {
+        const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
+        const u1 = Math.min(MAP_SIZE - 1, (z.x1 / TEX_SCALE) | 0);
+        const vr0 = (z.y0 / TEX_SCALE) | 0;
+        const vr1 = (z.y1 / TEX_SCALE) | 0;
+        const um = (u0 + u1) >> 1;
+        for (let vr = vr0; vr <= vr1; vr++) {
+          const vv = vr & 2047;
+          const rowOff = vv << 11;
+          const ly = vr - vr0;
+          for (let uu = u0; uu <= u1; uu++) {
+            if (uu === u0 || uu === u1 || vr === vr0 || vr === vr1) {
+              tex[rowOff | uu] = boostDark;
+            } else if (uu === u0 + 1 || uu === u1 - 1) {
+              tex[rowOff | uu] = boostRim;
+            } else {
+              const dx = Math.abs(uu - um);
+              const chv = (ly + dx) % 9;
+              tex[rowOff | uu] = chv < 4 ? boostChv : boostBg;
+            }
+          }
+        }
+      }
+    }
+
     // Sombras suaves de obstáculos estáticos en el piso
     const shadowCol = 0xff5a3e20;
     for (const o of chunk.obstacles) {

@@ -45,6 +45,13 @@ export const CRASH_SPIN_DURATION = 0.8;
 export const HEART_EVERY = 2500;
 export const SHIELD_EVERY = 1800;
 export const BOX_ROW_EVERY = 1200;
+export const HEART_SPACING = HEART_EVERY;
+export const SHIELD_SPACING = SHIELD_EVERY;
+export const BOOST_SPACING = 900;
+export const BOX_ROW_SPACING = BOX_ROW_EVERY;
+export const BOX_ROW_COUNT = 4;
+export const BOOST_PAD_DURATION = 0.9;
+export const HEART_FULL_BOOST = 0.65;
 
 // Biomas: cambian cada ~9.000 unidades con banda de transición de ~400 unidades
 export const BIOME_LENGTH = 9000;

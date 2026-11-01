@@ -11,6 +11,9 @@ import {
   CHASER_KILL_OFFSET,
   INVULN_DURATION,
   CRASH_SPIN_DURATION,
+  SHIELD_DURATION,
+  BOOST_PAD_DURATION,
+  HEART_FULL_BOOST,
   speedFactor,
   maxGapAt,
   chaserSpeed,
@@ -271,9 +274,39 @@ export class RunnerSim extends Sim {
 
     k.surface = 'road';
 
+    const ci = Math.floor(k.y / CHUNK_LEN);
+
+    // Zonas y recogibles en los trozos cercanos
+    for (let cIdx = Math.max(0, ci - 1); cIdx <= ci + 1; cIdx++) {
+      const ch = this.world.getChunk(cIdx);
+      if (ch.zones) {
+        for (const z of ch.zones) {
+          if (z.type === 'boost' && k.z <= 4) {
+            if (k.x >= z.x0 && k.x <= z.x1 && k.y >= z.y0 && k.y <= z.y1) {
+              const prev = k.boostT;
+              k.boostT = Math.max(k.boostT, BOOST_PAD_DURATION);
+              if (prev < 0.7) {
+                this.sfx('boost');
+                this.buzz(k, 40);
+              }
+            }
+          }
+        }
+      }
+      if (ch.pickups) {
+        for (const pk of ch.pickups) {
+          if (this.taken.has(pk.id)) continue;
+          if (k.z >= 36) continue;
+          const d = Math.hypot(k.x - pk.x, k.y - pk.y);
+          if (d < (pk.r || 18) + KART_R) {
+            this.collectPickup(k, pk);
+          }
+        }
+      }
+    }
+
     // Colisión con obstáculos de los trozos cercanos (solo si no está invulnerable)
     if (k.invulnT <= 0) {
-      const ci = Math.floor(k.y / CHUNK_LEN);
       for (let cIdx = Math.max(0, ci - 1); cIdx <= ci + 1; cIdx++) {
         const ch = this.world.getChunk(cIdx);
         for (const o of ch.obstacles) {
@@ -308,6 +341,36 @@ export class RunnerSim extends Sim {
       k.survived = this.raceTime;
     }
     k.progress = k.y;
+  }
+
+  collectPickup(k, pk) {
+    if (this.taken.has(pk.id)) return;
+    this.taken.add(pk.id);
+    this.emit({ type: 'pickup', id: pk.id, pickupType: pk.type, kart: k.id });
+    if (pk.type === 'heart') {
+      if (k.hearts < MAX_HEARTS) {
+        k.hearts = Math.min(MAX_HEARTS, k.hearts + 1);
+        this.sfx('heart');
+        this.say(k, '+1 ♥', 1.0);
+        this.buzz(k, 45);
+      } else {
+        k.boostT = Math.max(k.boostT, HEART_FULL_BOOST);
+        this.sfx('boost');
+        this.say(k, '¡TURBO!', 0.8);
+        this.buzz(k, 35);
+      }
+    } else if (pk.type === 'shield') {
+      k.shieldT = SHIELD_DURATION;
+      this.sfx('shield');
+      this.say(k, '¡ESCUDO!', 1.0);
+      this.buzz(k, 45);
+    } else if (pk.type === 'box') {
+      if (!k.item && k.rouletteT <= 0) {
+        k.rouletteT = 0.85;
+      }
+      this.sfx('box');
+      this.buzz(k, 30);
+    }
   }
 
   projBounds(p) {
