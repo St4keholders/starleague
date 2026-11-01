@@ -103,6 +103,7 @@ button:disabled { cursor: default; opacity: 0.5; }
 .results .nm { font-family: var(--pix); font-size: 12px; }
 .results .tag { font-size: 9px; padding: 2px 4px; background: var(--c); color: #120a24; margin-left: 4px; }
 .results .tm { color: var(--cyan); font-variant-numeric: tabular-nums; text-align: right; }
+.results .rs { color: var(--mute); font-size: 13px; padding-left: 8px; }
 .results .pt { color: var(--mute); text-align: right; font-variant-numeric: tabular-nums; }
 .results .pt b { color: #fff; margin-left: 6px; }
 .podium { min-width: 520px; }

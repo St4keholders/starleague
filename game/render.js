@@ -50,7 +50,13 @@ export class Renderer {
     const ctx = this.ctx;
     this.noLabels = !!ui.cinema;
     const vps = layoutFor(viewKarts.length, this.W, this.H);
-    const cams = viewKarts.map((k, i) => this.makeCam(k, vps[i]));
+    const aliveLeader = sim.mode === 'runner'
+      ? sim.karts.filter((o) => !o.eliminated).sort((a, b) => b.y - a.y)[0]
+      : null;
+    const cams = viewKarts.map((k, i) => {
+      const target = sim.mode === 'runner' && k.eliminated && aliveLeader ? aliveLeader : k;
+      return this.makeCam(target, vps[i]);
+    });
     cams.forEach((c) => {
       if (this.t.runner) this.t.applyBiomeFor(this, c.target.y);
       this.drawSky(c);
@@ -63,7 +69,7 @@ export class Renderer {
       ctx.save();
       ctx.beginPath(); ctx.rect(c.vp.x, c.vp.y, c.vp.w, c.vp.h); ctx.clip();
       ctx.translate(c.vp.x, c.vp.y);
-      this.drawSprites(sim, c, viewKarts[i]);
+      this.drawSprites(sim, c, c.target);
       if (!ui.demo) this.drawHUD(sim, c, viewKarts[i], viewKarts.length, ui.hudInset || 0);
       ctx.restore();
     });
@@ -586,6 +592,35 @@ export class Renderer {
       this.text(fmtTime(k.eliminated ? (k.survived || k.elimAt || 0) : sim.raceTime), R, pad + (big ? 13 : 9), big ? 8 : 6, '#c8f0ff', 'right');
       if (sim.started && sim.biomeBanner && sim.biomeBanner.t > 0) {
         this.text(`¡${sim.biomeBanner.name.toUpperCase()}!`, vw / 2, Math.round(vh * 0.19), big ? 11 : 7, '#ffd23f', 'center');
+      }
+      if (!k.eliminated) {
+        const gap = Math.max(0, k.y - (sim.chaserY ?? k.y - 600));
+        const mw = big ? 84 : 50;
+        const mh = big ? 6 : 4;
+        const mx = Math.round(vw / 2 - mw / 2);
+        const my = vh - pad - mh - 2;
+        ctx.fillStyle = 'rgba(18,10,24,0.82)';
+        ctx.fillRect(mx - 1, my - 1, mw + 2, mh + 2);
+        const safe01 = Math.max(0.06, Math.min(1, gap / 650));
+        const dCol = gap < 150 ? '#ff4d5e' : gap < 320 ? '#ffd23f' : '#3ddc84';
+        ctx.fillStyle = dCol;
+        ctx.fillRect(mx, my, Math.round(mw * safe01), mh);
+        const cb = biomeAt(sim.chaserY ?? k.y);
+        const chSpec = this.sp.decor[cb.chaser];
+        if (chSpec && chSpec.c) {
+          const isz = big ? 14 : 9;
+          ctx.drawImage(chSpec.c, mx - isz - 3, my + mh / 2 - isz * 0.4, isz, Math.round(isz * 0.65));
+        }
+        this.text(`${Math.round(gap / 10)} m`, vw / 2, my - (big ? 10 : 7), big ? 6 : 4, dCol, 'center');
+        if (sim.started && gap < 150 && Math.floor(sim.time * 8) % 2 === 0) {
+          ctx.strokeStyle = 'rgba(255,46,76,0.85)';
+          ctx.lineWidth = big ? 4 : 2;
+          ctx.strokeRect(1, 1, vw - 2, vh - 2);
+        }
+      } else {
+        const targetName = c.target && c.target.ch ? c.target.ch.name : '';
+        this.text(`ELIMINADO · mirando a ${targetName}`, vw / 2, Math.round(vh * 0.68), big ? 7 : 5, '#ff8a7a', 'center');
+        this.text(`${distM.toLocaleString('es-ES')} m`, vw / 2, Math.round(vh * 0.68) + (big ? 11 : 8), big ? 8 : 6, '#ffd23f', 'center');
       }
     } else if (sim.mode === 'race') {
       const pc = k.place === 1 ? '#ffd23f' : k.place === 2 ? '#d8dce6' : k.place === 3 ? '#e8954a' : '#ffffff';

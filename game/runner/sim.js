@@ -93,6 +93,7 @@ export class RunnerSim extends Sim {
     this.biomeBanner = { name: this.biome.name, t: 2.2 };
     this.leaderY = 320;
     this.chaserY = 300 - MAXGAP_START;
+    this.dangerTimer = 0;
     this.rng = mulberry32(this.seed ^ 0x5a5a5a5a);
   }
 
@@ -202,6 +203,17 @@ export class RunnerSim extends Sim {
         if (k.y < this.chaserY + CHASER_KILL_OFFSET) {
           this.eliminateKart(k, 'perseguidor');
         }
+      }
+
+      const humanInDanger = this.karts.some((k) => k.human && !k.eliminated && k.y - this.chaserY < 150);
+      if (humanInDanger) {
+        this.dangerTimer -= dt;
+        if (this.dangerTimer <= 0) {
+          this.dangerTimer = 1.0;
+          this.sfx('danger');
+        }
+      } else {
+        this.dangerTimer = 0;
       }
     }
 

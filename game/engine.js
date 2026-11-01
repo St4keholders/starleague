@@ -666,6 +666,7 @@ export class GameHost {
     }
     if (this.phase === 'storyend') { this.toLobby(); return; }
     if (this.phase === 'results') {
+      if (this.sim && this.sim.mode === 'runner') { this.startRace(); return; }
       if (this.cup && this.cup.current < this.cup.races.length - 1) { this.cup.current++; this.startRace(); return; }
       if (this.cup) { this.phase = 'podium'; this.audio.sfx('finish'); this.broadcast((i) => this.phaseMsg(i)); this.changed(); return; }
       this.toLobby();
