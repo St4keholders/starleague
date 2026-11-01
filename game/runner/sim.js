@@ -19,6 +19,8 @@ import {
   RAMP_VZ,
   RAMP_V_FACTOR,
   RAMP_BOOST,
+  DIFF_BOT_THINK_DT,
+  DIFF_BOT_ERROR,
   speedFactor,
   maxGapAt,
   chaserSpeed,
@@ -143,10 +145,13 @@ export class RunnerSim extends Sim {
 
   botSpeedMul(k) {
     let m = [0.97, 1.0, 1.02][this.diff] || 1.0;
-    // Rebufo suave para mantener al grupo competitivo sin que el líder mate a todos por MAXGAP temprano
+    // Rebufo de grupo para mantener la carrera compacta y evitar muertes prematuras por MAXGAP
     const gap = this.leaderY - k.y;
-    if (gap > 140) m *= Math.min(1.12, 1 + (gap - 140) / 2200);
-    else if (gap < 10 && this.karts.some((o) => o !== k && !o.eliminated && this.leaderY - o.y > 220)) m *= 0.95;
+    if (gap > 120) {
+      m *= Math.min(1.22, 1 + (gap - 120) / 1400);
+    } else if (gap < 15 && this.karts.some((o) => o !== k && !o.eliminated && this.leaderY - o.y > 190)) {
+      m *= 0.88;
+    }
     return m;
   }
 
@@ -366,6 +371,7 @@ export class RunnerSim extends Sim {
   updateKart(k, dt) {
     k._prevZ = k.z;
     const wasSpin = k.spinT > 0;
+    const wasFrozen = k.frozenT > 0;
     const gH = this.groundAt(k.x, k.y, k.z);
     if (
       !k.eliminated &&
@@ -384,8 +390,8 @@ export class RunnerSim extends Sim {
     }
     super.updateKart(k, dt);
     if (!k.eliminated && k.fallT <= 0 && k.frozenT <= 0) {
-      if (wasSpin && k.spinT <= 0 && k.v < 70) {
-        k.v = 70;
+      if ((wasSpin && k.spinT <= 0) || (wasFrozen && k.frozenT <= 0)) {
+        if (k.v < 85) k.v = 85;
       } else if (k.spinT <= 0 && k.v < k.maxV * 0.7 && (k.human ? !(k.input && k.input.brake) : true)) {
         k.v = Math.min(k.maxV, k.v + k.accel * 0.7 * dt);
       }
@@ -393,6 +399,41 @@ export class RunnerSim extends Sim {
         k.v = k.maxV * 0.92;
       }
     }
+  }
+
+  hit(k, kind, src) {
+    void src;
+    if (k.eliminated || k.fallT > 0 || k.invulnT > 0) return false;
+    if (k.shieldT > 0) {
+      k.shieldT = 0;
+      k.invulnT = 0.8;
+      this.sfx('pop');
+      this.say(k, '¡ESCUDO!', 0.8);
+      return false;
+    }
+    k.drift = 0;
+    k.driftT = 0;
+    k.driftLevel = 0;
+    if (kind === 'spin') {
+      k.spinT = 0.48;
+      k.v = Math.max(80, k.v * 0.55);
+    } else if (kind === 'frozen') {
+      k.frozenT = 0.45;
+      k.v = 0;
+    } else if (kind === 'sticky') {
+      k.stickyT = 1.6;
+      k.spinT = 0.35;
+      k.v = Math.max(85, k.v * 0.65);
+    } else if (kind === 'shock') {
+      k.spinT = 0.55;
+      k.v = Math.max(75, k.v * 0.5);
+      k.stickyT = 0.9;
+    }
+    k.invulnT = (k.spinT || 0) + (k.frozenT || 0) + 0.8;
+    k.hits++;
+    this.sfx('hit');
+    this.buzz(k, 200);
+    return true;
   }
 
   bounds(k, dt) {
@@ -424,7 +465,14 @@ export class RunnerSim extends Sim {
       // Reorientar suavemente hacia el camino si apunta contra la pared
       const roadAng = Math.atan2(1, slope);
       const da = wrapAngle(roadAng - k.a);
-      k.a += da * 0.25;
+      k.a += da * 0.35;
+    }
+
+    // Mantener el ángulo del kart apuntando hacia adelante (+Y) dentro de un cono razonable
+    const roadAng = Math.atan2(1, slope);
+    const angOff = wrapAngle(k.a - roadAng);
+    if (Math.abs(angOff) > 1.05) {
+      k.a = roadAng + Math.sign(angOff) * 1.05;
     }
 
     k.surface = 'road';
@@ -558,9 +606,23 @@ export class RunnerSim extends Sim {
       if (!k.item && k.rouletteT <= 0) {
         k.rouletteT = 0.85;
       }
+      k.power = Math.min(1, k.power + 0.08);
       this.sfx('box');
       this.buzz(k, 30);
     }
+  }
+
+  kartAhead(k) {
+    let best = null;
+    let bestY = Infinity;
+    for (const o of this.karts) {
+      if (o === k || o.eliminated) continue;
+      if (o.y > k.y && o.y < bestY) {
+        bestY = o.y;
+        best = o;
+      }
+    }
+    return best;
   }
 
   projBounds(p) {
@@ -582,22 +644,25 @@ export class RunnerSim extends Sim {
 
     ai.thinkT = (ai.thinkT || 0) - dt;
     if (ai.thinkT <= 0 || ai.targetOffset === undefined) {
-      ai.thinkT = [0.25, 0.15, 0.1][this.diff] || 0.15;
-      const lookY = k.y + 185;
-      const cxLook = centerX(this.seed, lookY);
+      ai.thinkT = DIFF_BOT_THINK_DT[this.diff] || 0.15;
+      const lookY = k.y + 210;
       const hwLook = halfW(this.seed, lookY) - 28;
-      let bestOff = 0;
-      let bestScore = -1e9;
+      const candidates = [];
 
       const ci0 = Math.max(0, Math.floor(k.y / CHUNK_LEN));
-      const ci1 = Math.floor((k.y + 270) / CHUNK_LEN);
+      const ci1 = Math.floor((k.y + 260) / CHUNK_LEN);
+      const curOff = k.x - centerX(this.seed, k.y);
 
       for (let c = -3; c <= 3; c++) {
         const candOff = (c / 3) * (hwLook * 0.84);
         let minClear = 999;
         let hazardPen = 0;
+        let bonus = 0;
+        let gotBoost = false;
+        let gotHeart = false;
+        let gotBox = false;
 
-        for (let s = 18; s <= 240; s += 18) {
+        for (let s = 20; s <= 240; s += 20) {
           const sy = k.y + s;
           const f = s / 240;
           const scx = centerX(this.seed, sy);
@@ -611,6 +676,29 @@ export class RunnerSim extends Sim {
                 hazardPen -= 1000;
               } else if (hz === 'goo') {
                 hazardPen -= 200;
+              }
+              if (!gotBoost && ch.zones) {
+                for (const z of ch.zones) {
+                  if (z.type === 'boost' && sx >= z.x0 && sx <= z.x1 && sy >= z.y0 && sy <= z.y1) {
+                    bonus += 120;
+                    gotBoost = true;
+                    break;
+                  }
+                }
+              }
+              if (ch.pickups) {
+                for (const pk of ch.pickups) {
+                  if (this.taken.has(pk.id)) continue;
+                  if (Math.hypot(sx - pk.x, sy - pk.y) < 28) {
+                    if (pk.type === 'heart' && k.hearts < MAX_HEARTS && !gotHeart) {
+                      bonus += 150;
+                      gotHeart = true;
+                    } else if (pk.type === 'box' && !k.item && !gotBox) {
+                      bonus += 60;
+                      gotBox = true;
+                    }
+                  }
+                }
               }
             }
             for (const o of ch.obstacles) {
@@ -631,15 +719,17 @@ export class RunnerSim extends Sim {
           }
         }
 
-        const curOff = k.x - centerX(this.seed, k.y);
         const clearScore = minClear < 24 ? (minClear - 24) * 45 : Math.min(90, minClear) * 4;
-        let score = clearScore + hazardPen - Math.abs(candOff - curOff) * 0.12 - Math.abs(candOff) * 0.04;
-        if (score > bestScore) {
-          bestScore = score;
-          bestOff = candOff;
-        }
+        const effBonus = minClear >= 24 && hazardPen > -100 ? bonus : 0;
+        const score = clearScore + hazardPen + effBonus - Math.abs(candOff - curOff) * 0.14 - Math.abs(candOff) * 0.04;
+        candidates.push({ candOff, score, safe: hazardPen > -500 && minClear > 20 });
       }
-      ai.targetOffset = bestOff;
+
+      candidates.sort((a, b) => b.score - a.score);
+      const errProb = DIFF_BOT_ERROR[this.diff] ?? 0.06;
+      const safeAlt = candidates.length > 1 && candidates[1].safe ? candidates[1] : candidates[0];
+      const chosen = this.rng() < errProb ? safeAlt : candidates[0];
+      ai.targetOffset = chosen.candOff;
     }
 
     // Saltar si hay un obstáculo saltable o canal de agua/lava/hueco justo adelante a menos de 55 u
@@ -671,9 +761,40 @@ export class RunnerSim extends Sim {
     const tx = centerX(this.seed, ty) + (ai.targetOffset || 0);
     const want = Math.atan2(ty - k.y, tx - k.x);
     const diff = wrapAngle(want - k.a);
-    inp.steer = Math.max(-1, Math.min(1, diff * 2.8)) * (k.v < 0 ? -1 : 1);
+    if (k.blindT > 0) ai.noise = Math.max(-0.2, Math.min(0.2, (ai.noise || 0) + (this.rng() - 0.5) * dt * 2));
+    else ai.noise = (ai.noise || 0) * 0.85;
+    inp.steer = Math.max(-1, Math.min(1, diff * 2.8 + (ai.noise || 0))) * (k.v < 0 ? -1 : 1);
     inp.acc = true;
     inp.brake = false;
+
+    // Uso de objetos y poderes (sección 3.8)
+    if (k.item) {
+      ai.itemT = (ai.itemT || 1.2) - dt;
+      if (ai.itemT <= 0) {
+        let use = false;
+        const ahead = this.kartAhead(k);
+        if (k.item === 'chile') use = Math.abs(diff) < 0.25;
+        else if (k.item === 'burbuja' || k.item === 'iman') use = true;
+        else if (k.item === 'aceite') use = this.karts.some((o) => !o.eliminated && o !== k && o.y < k.y && k.y - o.y < 140);
+        else if (k.item === 'chicle') use = Boolean(ahead && ahead.y - k.y < 220);
+        if (use || ai.itemT < -5) {
+          inp.item = true;
+          ai.itemT = 1.5 + this.rng() * 2.5;
+        }
+      }
+    }
+    if (k.power >= 1 || k.charges > 0) {
+      ai.powerT = (ai.powerT || 1.8) - dt;
+      if (ai.powerT <= 0) {
+        let use = true;
+        if (k.ch.power === 'temblor') use = this.karts.some((o) => !o.eliminated && o !== k && Math.hypot(o.x - k.x, o.y - k.y) < 140);
+        if (k.ch.power === 'triple' || k.charges > 0) use = Math.abs(diff) < 0.25;
+        if (use || ai.powerT < -7) {
+          inp.power = true;
+          ai.powerT = 2.0 + this.rng() * 3.5;
+        }
+      }
+    }
   }
 
   rank() {
