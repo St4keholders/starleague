@@ -590,6 +590,139 @@ function makeDecor() {
     rect(x, 7, 2, 2, 8, '#9a9ab0'); rect(x, 21, 2, 2, 8, '#9a9ab0'); disc(x, 8, 2, 2, '#ffd23f'); disc(x, 22, 2, 2, '#ffd23f');
     add('zorgstatue', c, 80);
   }
+  { // granero rojo de frente (barn)
+    const c = mkCanvas(56, 48), x = c.getContext('2d');
+    // techo gambrel gris oscuro con borde blanco
+    x.fillStyle = '#4a4e58';
+    x.beginPath(); x.moveTo(28, 2); x.lineTo(48, 11); x.lineTo(54, 22); x.lineTo(2, 22); x.lineTo(8, 11); x.closePath(); x.fill();
+    x.strokeStyle = '#f4f0e8'; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(2, 22); x.lineTo(8, 11); x.lineTo(28, 2); x.lineTo(48, 11); x.lineTo(54, 22); x.stroke();
+    // cuerpo rojo con tablas verticales
+    rect(x, 5, 22, 46, 26, '#c82e24');
+    rect(x, 5, 22, 6, 26, '#de3e32');
+    rect(x, 45, 22, 6, 26, '#a4221a');
+    for (let xx = 9; xx < 50; xx += 5) rect(x, xx, 22, 1, 26, '#9e2018');
+    // ventana superior del pajar
+    rect(x, 22, 11, 12, 8, '#241a18');
+    rect(x, 21, 10, 14, 1, '#f4f0e8'); rect(x, 21, 19, 14, 1, '#f4f0e8');
+    rect(x, 23, 16, 10, 3, '#e8a838');
+    // puerta doble con marco blanco y X
+    rect(x, 16, 27, 24, 21, '#a8221a');
+    rect(x, 16, 27, 24, 2, '#f4f0e8'); rect(x, 16, 27, 2, 21, '#f4f0e8'); rect(x, 38, 27, 2, 21, '#f4f0e8'); rect(x, 27, 27, 2, 21, '#f4f0e8');
+    x.strokeStyle = '#f4f0e8'; x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(17, 28); x.lineTo(27, 47); x.moveTo(27, 28); x.lineTo(17, 47);
+    x.moveTo(29, 28); x.lineTo(39, 47); x.moveTo(39, 28); x.lineTo(29, 47);
+    x.stroke();
+    add('barn', c, 120);
+  }
+  { // tractor de frente (tractor) y de lado (tractor_side)
+    const c = mkCanvas(36, 32), x = c.getContext('2d');
+    // ruedas traseras grandes
+    rect(x, 2, 14, 7, 18, '#1e1e24'); rect(x, 3, 16, 5, 14, '#2e2e36'); rect(x, 4, 20, 3, 6, '#f2b824');
+    rect(x, 27, 14, 7, 18, '#1e1e24'); rect(x, 28, 16, 5, 14, '#2e2e36'); rect(x, 29, 20, 3, 6, '#f2b824');
+    // cabina negra y techo amarillo
+    rect(x, 10, 4, 16, 14, '#1c2026');
+    rect(x, 12, 6, 12, 8, '#7ad8ff'); rect(x, 17, 6, 2, 8, '#1c2026');
+    rect(x, 9, 2, 18, 3, '#f5ba1e');
+    // capó amarillo y parrilla
+    rect(x, 9, 15, 18, 13, '#f5ba1e'); rect(x, 11, 14, 14, 3, '#ffd44c');
+    rect(x, 13, 19, 10, 7, '#34363e');
+    for (let yy = 20; yy <= 24; yy += 2) rect(x, 14, yy, 8, 1, '#7a7e8a');
+    // faros y escape
+    disc(x, 10, 20, 2, '#fff8b8'); disc(x, 26, 20, 2, '#fff8b8');
+    rect(x, 8, 5, 2, 10, '#3a3a44');
+    add('tractor', c, 70);
+
+    const cs = mkCanvas(42, 30), xs = cs.getContext('2d');
+    // cabina y capó de lado
+    rect(xs, 6, 14, 28, 10, '#f5ba1e'); rect(xs, 6, 14, 28, 3, '#ffd44c');
+    rect(xs, 18, 3, 15, 13, '#1c2026'); rect(xs, 20, 5, 11, 8, '#7ad8ff');
+    rect(xs, 17, 2, 17, 2, '#f5ba1e');
+    rect(xs, 10, 5, 2, 9, '#3a3a44');
+    // rueda trasera grande y delantera
+    disc(xs, 27, 21, 9, '#1e1e24'); disc(xs, 27, 21, 5, '#f5ba1e'); disc(xs, 27, 21, 2, '#3a3a44');
+    disc(xs, 10, 23, 6, '#1e1e24'); disc(xs, 10, 23, 3, '#f5ba1e');
+    add('tractor_side', cs, 70);
+  }
+  { // paca de heno redonda dorada (haybale)
+    const c = mkCanvas(24, 20), x = c.getContext('2d');
+    ell(x, 12, 11, 11, 8, '#d99826');
+    ell(x, 12, 9, 10, 6, '#f2b838');
+    ell(x, 11, 8, 6, 3, '#ffd25a');
+    // cuerdas y espiral lateral
+    rect(x, 7, 4, 1, 14, '#8a5418'); rect(x, 16, 4, 1, 14, '#8a5418');
+    rect(x, 4, 10, 3, 1, '#a86a1c'); rect(x, 17, 12, 3, 1, '#a86a1c');
+    add('haybale', c, 34);
+  }
+  { // tramo de cerca de madera: 3 postes y 2 tablas (fence)
+    const c = mkCanvas(48, 20), x = c.getContext('2d');
+    // 2 tablas horizontales
+    rect(x, 1, 6, 46, 4, '#9a6234'); rect(x, 1, 6, 46, 1, '#ba7e4a');
+    rect(x, 1, 13, 46, 4, '#8a5428'); rect(x, 1, 13, 46, 1, '#aa6e3c');
+    // 3 postes verticales
+    for (const px of [4, 22, 40]) {
+      rect(x, px, 2, 5, 18, '#7a4620');
+      rect(x, px, 2, 2, 18, '#9a6032');
+      rect(x, px + 1, 1, 3, 1, '#ba7e4a');
+    }
+    add('fence', c, 80);
+  }
+  { // calabaza naranja normal (pumpkin) e iluminada (pumpkin_lit)
+    const drawBasePumpkin = (x) => {
+      rect(x, 8, 1, 2, 3, '#3a6a22');
+      ell(x, 9, 9, 8, 6, '#d95814');
+      ell(x, 9, 9, 6, 6, '#f26e1c');
+      ell(x, 9, 9, 3, 6, '#ff8626');
+      rect(x, 7, 5, 2, 2, '#ffa84a');
+    };
+    const c1 = mkCanvas(18, 16), x1 = c1.getContext('2d');
+    drawBasePumpkin(x1);
+    add('pumpkin', c1, 20);
+
+    const c2 = mkCanvas(18, 16), x2 = c2.getContext('2d');
+    drawBasePumpkin(x2);
+    rect(x2, 5, 7, 2, 2, '#fff47a'); rect(x2, 11, 7, 2, 2, '#fff47a');
+    rect(x2, 5, 11, 8, 2, '#ffd23f'); rect(x2, 7, 10, 4, 1, '#fff47a');
+    add('pumpkin_lit', c2, 20);
+  }
+  { // silo de granja con techo de cúpula (silo)
+    const c = mkCanvas(30, 58), x = c.getContext('2d');
+    // cúpula superior plateada
+    disc(x, 15, 14, 11, '#b8c0cc');
+    disc(x, 13, 12, 8, '#dce2ec');
+    rect(x, 4, 14, 22, 42, '#c6362c');
+    rect(x, 4, 14, 6, 42, '#de4a3e');
+    rect(x, 20, 14, 6, 42, '#9e261e');
+    // aros metálicos y escalera
+    for (let yy = 16; yy < 54; yy += 7) rect(x, 4, yy, 22, 2, '#8a929e');
+    rect(x, 14, 14, 3, 42, '#5a606a');
+    for (let yy = 16; yy < 54; yy += 3) rect(x, 14, yy, 3, 1, '#d8dee8');
+    add('silo', c, 70);
+  }
+  { // molino de granja de metal con rueda roja y blanca (windmill2)
+    const c = mkCanvas(34, 56), x = c.getContext('2d');
+    x.strokeStyle = '#6e7682'; x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(17, 16); x.lineTo(6, 55);
+    x.moveTo(17, 16); x.lineTo(28, 55);
+    x.moveTo(11, 30); x.lineTo(23, 30);
+    x.moveTo(8, 43); x.lineTo(26, 43);
+    x.moveTo(11, 30); x.lineTo(26, 43);
+    x.moveTo(23, 30); x.lineTo(8, 43);
+    x.stroke();
+    // rueda de paletas roja y blanca
+    disc(x, 17, 15, 12, '#e0342a');
+    disc(x, 17, 15, 9, '#f4f4f8');
+    disc(x, 17, 15, 6, '#e0342a');
+    x.strokeStyle = '#4a505a'; x.lineWidth = 1.5;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      x.beginPath(); x.moveTo(17, 15); x.lineTo(17 + Math.cos(a) * 12, 15 + Math.sin(a) * 12); x.stroke();
+    }
+    disc(x, 17, 15, 2, '#3a4048');
+    add('windmill2', c, 60);
+  }
   return D;
 }
 
@@ -682,6 +815,30 @@ function makeFx() {
   { const c = mkCanvas(30, 30), x = c.getContext('2d');
     x.fillStyle = 'rgba(170,230,255,0.55)'; x.fillRect(2, 2, 26, 26); x.strokeStyle = '#e6fbff'; x.lineWidth = 2; x.strokeRect(2, 2, 26, 26);
     rect(x, 5, 5, 6, 2, '#ffffff'); add('ice', c, 40); }
+  { // corazón pixel-art lleno y vacío (HUD)
+    const rows = [
+      ' 111 111 ',
+      '122111111',
+      '121111111',
+      '111111111',
+      ' 1111111 ',
+      '  11111  ',
+      '   111   ',
+      '    1    ',
+    ];
+    const cf = mkCanvas(11, 10), xf = cf.getContext('2d');
+    const ce = mkCanvas(11, 10), xe = ce.getContext('2d');
+    for (let y = 0; y < rows.length; y++) {
+      for (let x = 0; x < rows[y].length; x++) {
+        const ch = rows[y][x];
+        if (ch === ' ') continue;
+        rect(xf, x + 1, y + 1, 1, 1, ch === '2' ? '#ffb8c4' : '#ff3b52');
+        rect(xe, x + 1, y + 1, 1, 1, '#3a2234');
+      }
+    }
+    F.heartFull = outline(cf, '#180814');
+    F.heartEmpty = outline(ce, '#180814');
+  }
   return F;
 }
 

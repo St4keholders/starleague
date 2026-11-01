@@ -40,6 +40,32 @@ for (const seed of SEEDS) {
 }
 console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
 
+// 2.5 Verificar choques, escudo, invulnerabilidad y eliminación por vidas
+{
+  const sim = new RunnerSim({ seed: 123, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
+  sim.started = true;
+  const k = sim.karts[0];
+  const ch3 = sim.world.getChunk(3);
+  const obs = ch3.obstacles.find((o) => o.solid);
+  assert(obs, 'Debe existir obstáculo sólido en el trozo 3');
+  // Con escudo activo: absorbe el golpe sin quitar corazón
+  k.shieldT = 5;
+  k.x = obs.x; k.y = obs.y; k.z = 0; k.v = 200;
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 3 && k.shieldT === 0 && k.invulnT > 0, 'El escudo debe absorber el golpe sin quitar corazón');
+  // Mientras está invulnerable, no pierde corazón
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 3, 'No debe perder corazón durante invulnerabilidad');
+  // Tres choques sin invulnerabilidad eliminan por vidas
+  for (let hit = 1; hit <= 3; hit++) {
+    k.invulnT = 0;
+    k.x = obs.x; k.y = obs.y; k.z = 0; k.v = 200;
+    sim.bounds(k, 1 / 60);
+    assert(k.hearts === 3 - hit, `Tras golpe ${hit} debería tener ${3 - hit} corazones`);
+  }
+  assert(k.eliminated && k.elimReason === 'vidas', 'Al llegar a 0 corazones debe quedar eliminado por vidas');
+}
+
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades
 console.log('3) Simulando partidas automáticas (10 semillas × 3 dificultades)...');
 const MATCH_SEEDS = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];

@@ -216,7 +216,8 @@ export class Renderer {
     // decoración
     const decorList = t.runner ? t.visibleDecor(c, sim) : t.decor;
     for (const d of decorList) {
-      const spec = sp.decor[d.kind];
+      const kind = d.kind === 'pumpkin' && d.lit ? 'pumpkin_lit' : d.kind;
+      const spec = sp.decor[kind] || sp.decor[d.kind];
       if (!spec) continue;
       const p = this.proj(c, d.x, d.y, spec.float || 0);
       if (p && p.f < CAM_DIST * 0.75) continue;
@@ -414,8 +415,21 @@ export class Renderer {
     // destello
     if (k.flashT > 0) { ctx.fillStyle = `rgba(255,250,220,${Math.min(0.92, k.flashT / 1.2)})`; ctx.fillRect(0, 0, vw, vh); }
 
-    // posición o globos
-    if (sim.mode === 'race') {
+    // posición, globos o supervivencia
+    if (sim.mode === 'runner') {
+      const hSize = big ? 13 : 9;
+      const hGap = big ? 15 : 10;
+      const hearts = k.hearts ?? 3;
+      for (let i = 0; i < 3; i++) {
+        const img = i < hearts ? this.sp.fx.heartFull : this.sp.fx.heartEmpty;
+        if (img) ctx.drawImage(img, L + i * hGap, pad, hSize, Math.round(hSize * 0.9));
+      }
+      const aliveCount = sim.karts.filter((o) => !o.eliminated).length;
+      this.text(`VIVOS ${aliveCount}/${sim.karts.length}`, L, pad + (big ? 15 : 11), big ? 7 : 5, '#c8f0ff');
+      const distM = Math.max(0, Math.round(k.distance || Math.max(0, (k.y - (k.startY || 0)) / 10)));
+      this.text(`${distM.toLocaleString('es-ES')} m`, R, pad, big ? 10 : 7, '#ffd23f', 'right');
+      this.text(fmtTime(k.eliminated ? (k.survived || k.elimAt || 0) : sim.raceTime), R, pad + (big ? 13 : 9), big ? 8 : 6, '#c8f0ff', 'right');
+    } else if (sim.mode === 'race') {
       const pc = k.place === 1 ? '#ffd23f' : k.place === 2 ? '#d8dce6' : k.place === 3 ? '#e8954a' : '#ffffff';
       this.text(`${k.place}º`, L, pad, big ? 24 : 14, pc);
       const lap = Math.max(1, Math.min(sim.laps, k.lap));
@@ -461,8 +475,8 @@ export class Renderer {
     this.text(`${Math.max(0, Math.round(Math.abs(k.v) * 0.5))}`, gx - (big ? 34 : 22), gy, big ? 14 : 9, k.boostT > 0 ? '#ffd23f' : '#ffffff', 'right');
     this.text('km/h', gx, gy + (big ? 6 : 4), big ? 6 : 4, '#c8f0ff', 'right');
 
-    // minimapa (1 jugador)
-    if (nViews === 1) this.drawMinimap(sim, R - 72, 34, 72);
+    // minimapa (1 jugador, excepto en supervivencia)
+    if (nViews === 1 && sim.mode !== 'runner') this.drawMinimap(sim, R - 72, 34, 72);
 
     // mensaje
     if (k.messageT > 0 && k.message) {
@@ -502,12 +516,13 @@ export class Renderer {
   drawSidePanel(sim, vp) {
     const ctx = this.ctx;
     ctx.save(); ctx.translate(vp.x, vp.y);
-    this.drawMinimap(sim, 8, 10, 112);
+    if (sim.mode !== 'runner' && this.t.minimap) this.drawMinimap(sim, 8, 10, 112);
     const sorted = [...sim.karts].sort((a, b) => a.place - b.place);
+    const x0 = sim.mode === 'runner' ? 16 : 128;
     sorted.forEach((k, i) => {
-      const col = k.human ? SLOT_COLORS[k.slot] : '#c8c0e0';
-      ctx.drawImage(this.sp.portraits[k.char], 128, 8 + i * 15, 12, 12);
-      this.text(`${k.place} ${k.ch.name}`, 144, 11 + i * 15, 6, col, 'left', false);
+      const col = k.eliminated ? '#7a6a8a' : k.human ? SLOT_COLORS[k.slot] : '#c8c0e0';
+      ctx.drawImage(this.sp.portraits[k.char], x0, 8 + i * 16, 12, 12);
+      this.text(`${k.place} ${k.ch.name}`, x0 + 16, 11 + i * 16, 6, col, 'left', false);
     });
     ctx.restore();
   }
@@ -516,10 +531,10 @@ export class Renderer {
     if (sim.started && sim.raceTime > 1) return;
     const ctx = this.ctx;
     if (!sim.started && sim.countdown > 3.05) {
-      const name = this.t.def.name.toUpperCase();
+      const name = (sim.mode === 'runner' && sim.biome ? sim.biome.name : this.t.def.name).toUpperCase();
       ctx.fillStyle = 'rgba(18,10,24,0.7)'; ctx.fillRect(0, this.H / 2 - 22, this.W, 44);
       this.text(name, this.W / 2, this.H / 2 - 12, 14, '#ffd23f', 'center');
-      const sub = sim.story && sim.story.obj ? sim.story.obj.toUpperCase() : sim.mode === 'battle' ? 'BATALLA DE GLOBOS' : `${sim.laps || LAPS} VUELTAS`;
+      const sub = sim.story && sim.story.obj ? sim.story.obj.toUpperCase() : sim.mode === 'runner' ? 'SUPERVIVENCIA ESTELAR' : sim.mode === 'battle' ? 'BATALLA DE GLOBOS' : `${sim.laps || LAPS} VUELTAS`;
       this.text(sub, this.W / 2, this.H / 2 + 6, 7, sim.story ? '#7ff6ff' : '#ffffff', 'center');
       return;
     }
