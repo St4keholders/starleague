@@ -1,6 +1,7 @@
 // Render pseudo-3D estilo "modo 7" + sprites + HUD
 import { VIEW_W, VIEW_H, SLOT_COLORS, SLOT_NAMES, LAPS } from './constants.js';
 import { getSprites, getShadowFrames, getAlienFrames, KART_FRAMES, KART_SPRITE } from './sprites.js';
+import { centerX, halfW, biomeAt, obstacleStateAt } from './runner/layout.js';
 
 const FONT = '"Press Start 2P", monospace';
 const FOG0 = 620, FOG1 = 1350;
@@ -49,8 +50,18 @@ export class Renderer {
     const ctx = this.ctx;
     this.noLabels = !!ui.cinema;
     const vps = layoutFor(viewKarts.length, this.W, this.H);
-    const cams = viewKarts.map((k, i) => this.makeCam(k, vps[i]));
-    cams.forEach((c) => { this.drawSky(c); this.drawFloor(c); });
+    const aliveLeader = sim.mode === 'runner'
+      ? sim.karts.filter((o) => !o.eliminated).sort((a, b) => b.y - a.y)[0]
+      : null;
+    const cams = viewKarts.map((k, i) => {
+      const target = sim.mode === 'runner' && k.eliminated && aliveLeader ? aliveLeader : k;
+      return this.makeCam(target, vps[i]);
+    });
+    cams.forEach((c) => {
+      if (this.t.runner) this.t.applyBiomeFor(this, c.target.y);
+      this.drawSky(c);
+      this.drawFloor(c);
+    });
     // cuadrante vacío con 3 jugadores
     if (viewKarts.length === 3) this.fillRect(vps[3], 0xff201430);
     ctx.putImageData(this.img, 0, 0);
@@ -58,7 +69,7 @@ export class Renderer {
       ctx.save();
       ctx.beginPath(); ctx.rect(c.vp.x, c.vp.y, c.vp.w, c.vp.h); ctx.clip();
       ctx.translate(c.vp.x, c.vp.y);
-      this.drawSprites(sim, c, viewKarts[i]);
+      this.drawSprites(sim, c, c.target);
       if (!ui.demo) this.drawHUD(sim, c, viewKarts[i], viewKarts.length, ui.hudInset || 0);
       ctx.restore();
     });
@@ -155,7 +166,25 @@ export class Renderer {
       let wy = (c.y + sa * f - ca * hw * scale) * ks;
       const sx = -sa * scale * ks, sy = ca * scale * ks;
       const fog = f > FOG0 ? (f - FOG0) / (FOG1 - FOG0) : 0;
-      if (fog <= 0) {
+      if (this.t.ring) {
+        if (fog <= 0) {
+          for (let x = 0; x < vp.w; x++) {
+            const u = wx | 0, v = (wy | 0) & 2047;
+            buf[o++] = (u & ~2047) === 0 ? tex[(v << 11) | u] : outer[((v & 63) << 6) | (u & 63)];
+            wx += sx; wy += sy;
+          }
+        } else {
+          const inv = 1 - fog;
+          const fR = fr * fog, fG = fg * fog, fB = fb * fog;
+          for (let x = 0; x < vp.w; x++) {
+            const u = wx | 0, v = (wy | 0) & 2047;
+            const col = (u & ~2047) === 0 ? tex[(v << 11) | u] : outer[((v & 63) << 6) | (u & 63)];
+            const r = ((col & 255) * inv + fR) | 0, g = (((col >> 8) & 255) * inv + fG) | 0, b = (((col >> 16) & 255) * inv + fB) | 0;
+            buf[o++] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+            wx += sx; wy += sy;
+          }
+        }
+      } else if (fog <= 0) {
         for (let x = 0; x < vp.w; x++) {
           const u = wx | 0, v = wy | 0;
           buf[o++] = ((u | v) & ~2047) === 0 ? tex[(v << 11) | u] : outer[((v & 63) << 6) | (u & 63)];
@@ -191,16 +220,171 @@ export class Renderer {
     const time = sim.time;
     const push = (p, draw) => { if (p && p.sx > -80 && p.sx < c.vp.w + 80) list.push({ f: p.f, p, draw }); };
 
-    // decoración
-    for (const d of t.decor) {
-      const spec = sp.decor[d.kind];
+    // decoración y recogibles
+    const bf = sp.fx.box[Math.floor(time * 6) % 4];
+    const decorList = t.runner ? t.visibleDecor(c, sim) : t.decor;
+    for (const d of decorList) {
+      if (d.type === 'box' || d.kind === 'box') {
+        const z = 7 + Math.sin(time * 3 + d.x * 0.1) * 2.5;
+        const p = this.proj(c, d.x, d.y, z);
+        if (p) push(p, () => { this.shadow(p, c, d.x, d.y, 8); this.billboard(bf.c, p, bf.w); });
+        continue;
+      }
+      if (d.type === 'heart' || d.type === 'shield') {
+        const spec = sp.decor[d.kind];
+        if (!spec) continue;
+        const z = (spec.float || 10) + Math.sin(time * 4 + d.x * 0.1) * 3;
+        const p = this.proj(c, d.x, d.y, z);
+        if (p) push(p, () => { this.shadow(p, c, d.x, d.y, 7); this.billboard(spec.c, p, spec.w); });
+        continue;
+      }
+      if (d.kind === 'barn_roof') {
+        const yNear = Math.max(c.y + 10, d.y0);
+        if (d.y1 <= yNear + 4) continue;
+        const p00 = this.proj(c, d.x0, yNear, d.h);
+        const p10 = this.proj(c, d.x1, yNear, d.h);
+        const p11 = this.proj(c, d.x1, d.y1, d.h);
+        const p01 = this.proj(c, d.x0, d.y1, d.h);
+        if (p00 && p10 && p11 && p01) {
+          const minF = Math.min(p00.f, p10.f, p11.f, p01.f);
+          list.push({
+            f: minF + 2,
+            p: p00,
+            draw: () => {
+              ctx.fillStyle = '#4a4e58';
+              ctx.beginPath();
+              ctx.moveTo(p00.sx, p00.sy);
+              ctx.lineTo(p10.sx, p10.sy);
+              ctx.lineTo(p11.sx, p11.sy);
+              ctx.lineTo(p01.sx, p01.sy);
+              ctx.closePath();
+              ctx.fill();
+              ctx.strokeStyle = '#f4f0e8';
+              ctx.lineWidth = Math.max(1, 2 * p00.s);
+              ctx.stroke();
+              // Líneas de tejas y cumbrera central
+              ctx.strokeStyle = '#383b44';
+              ctx.lineWidth = Math.max(1, 1.2 * p00.s);
+              for (let s = 1; s <= 3; s++) {
+                const t01 = s / 4;
+                const lx = p00.sx + (p01.sx - p00.sx) * t01;
+                const ly = p00.sy + (p01.sy - p00.sy) * t01;
+                const rx = p10.sx + (p11.sx - p10.sx) * t01;
+                const ry = p10.sy + (p11.sy - p10.sy) * t01;
+                ctx.beginPath();
+                ctx.moveTo(lx, ly);
+                ctx.lineTo(rx, ry);
+                ctx.stroke();
+              }
+              const mx0 = (p00.sx + p10.sx) * 0.5, my0 = (p00.sy + p10.sy) * 0.5;
+              const mx1 = (p01.sx + p11.sx) * 0.5, my1 = (p01.sy + p11.sy) * 0.5;
+              ctx.strokeStyle = '#686e7c';
+              ctx.beginPath();
+              ctx.moveTo(mx0, my0);
+              ctx.lineTo(mx1, my1);
+              ctx.stroke();
+            },
+          });
+        }
+        continue;
+      }
+      if (d.moving) {
+        const st = obstacleStateAt(d, sim.raceTime || 0);
+        if (d.moveType === 'fire') {
+          if (st.warning) {
+            const k = st.k;
+            const pg = this.proj(c, st.x, st.y, 0);
+            if (pg) {
+              push(pg, () => {
+                ctx.fillStyle = `rgba(0,0,0,${0.5 - k * 0.35})`;
+                const rr = (10 + (1 - k) * 18) * pg.s;
+                ctx.beginPath();
+                ctx.ellipse(pg.sx, pg.sy, rr, rr * 0.35, 0, 0, Math.PI * 2);
+                ctx.fill();
+              });
+            }
+            const p = this.proj(c, st.x, st.y, k * 280);
+            const fr = (d.skin === 'meteor' ? sp.fx.meteor : sp.fx.fire)[st.frame];
+            if (p) push({ ...p, f: p.f - 1 }, () => this.billboard(fr.c, p, fr.w));
+          }
+          continue;
+        }
+        if (d.kind === 'crab') {
+          const fr = sp.fx.crab[st.frame];
+          const p = this.proj(c, st.x, st.y, 0);
+          if (p && p.f >= CAM_DIST * 0.75) push(p, () => this.billboard(fr.c, p, fr.w));
+          continue;
+        }
+        if (d.kind === 'sheep') {
+          const spec = st.frame ? sp.decor.sheep2 : sp.decor.sheep;
+          const p = this.proj(c, st.x, st.y, 0);
+          if (p && p.f >= CAM_DIST * 0.75 && spec) {
+            push(p, () => {
+              this.shadow(p, c, st.x, st.y, 8);
+              this.billboard(spec.c, p, spec.w);
+            });
+          }
+          continue;
+        }
+        const spec = sp.decor[d.kind];
+        if (!spec) continue;
+        const p = this.proj(c, st.x, st.y, spec.float || 0);
+        if (p && p.f >= CAM_DIST * 0.75) {
+          push(p, () => {
+            this.shadow(p, c, st.x, st.y, d.r || 16);
+            this.billboard(spec.c, p, spec.w);
+          });
+        }
+        continue;
+      }
+      const kind = d.kind === 'pumpkin' && d.lit
+        ? 'pumpkin_lit'
+        : d.kind === 'grasstuft' && d.jungle
+          ? 'grasstuft_jungle'
+          : d.kind;
+      const spec = sp.decor[kind] || sp.decor[d.kind];
       if (!spec) continue;
-      const p = this.proj(c, d.x, d.y, spec.float || 0);
+      // Colocar la fachada del granero en el borde frontal (y0) para coincidir con el techo
+      const py = d.kind === 'barn' && d.h ? d.y - d.h * 0.45 : d.y;
+      const p = this.proj(c, d.x, py, spec.float || 0);
       if (p && p.f < CAM_DIST * 0.75) continue;
+      if (d.kind === 'gate' && d.biomeName) {
+        push(p, () => {
+          this.billboard(spec.c, p, spec.w);
+          const sc = (spec.w / spec.c.width) * p.s;
+          const h = spec.c.height * sc;
+          const fontSz = Math.max(5, Math.min(12, Math.round(7 * p.s * 1.3)));
+          this.text(d.biomeName.toUpperCase(), Math.round(p.sx), Math.round(p.sy - h * 0.86), fontSz, '#ffd23f', 'center');
+        });
+        continue;
+      }
       push(p, () => this.billboard(spec.c, p, spec.w, d.kind === 'starcrystal' || d.kind === 'asteroid' ? Math.sin(time * 2 + d.x) * 4 * p.s : 0));
     }
+    // banda del perseguidor en Supervivencia Estelar (sección 4.3)
+    if (this.t.runner && sim.chaserY !== undefined) {
+      const cy = sim.chaserY;
+      if (cy > c.y - 80 && cy < c.y + 1350) {
+        const cb = biomeAt(cy);
+        const chSpec = sp.decor[cb.chaser] || sp.decor.stampede;
+        const seed = this.t.seed || 12345;
+        const cx = centerX(seed, cy);
+        const hw = halfW(seed, cy);
+        if (chSpec) {
+          for (let ox = -hw + 20; ox <= hw - 20; ox += 42) {
+            const wx = cx + ox;
+            const wy = cy + Math.sin(time * 5 + ox * 0.04) * 6;
+            const wz = (chSpec.float || 0) + Math.abs(Math.sin(time * 9 + ox * 0.08)) * 5;
+            const p = this.proj(c, wx, wy, wz);
+            if (p) {
+              const isCenter = Math.abs(ox) < 22;
+              const wMul = isCenter ? 1.35 : 0.92;
+              push(p, () => this.billboard(chSpec.c, p, chSpec.w * wMul));
+            }
+          }
+        }
+      }
+    }
     // cajas
-    const bf = sp.fx.box[Math.floor(time * 6) % 4];
     for (const b of sim.boxes) {
       if (b.t > 0) continue;
       const z = 7 + Math.sin(time * 3 + b.x * 0.1) * 2.5;
@@ -319,10 +503,11 @@ export class Renderer {
     if (k.fallT > 0 && k.z < -20) return;
     // sombra
     if (k.fallT <= 0) {
-      const g = this.proj(c, k.x, k.y, 0);
+      const gH = sim.groundAt ? sim.groundAt(k.x, k.y, k.z) : 0;
+      const g = this.proj(c, k.x, k.y, gH);
       if (g) {
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        const rx = (12 - Math.min(6, k.z * 0.08)) * g.s;
+        const rx = (12 - Math.min(6, Math.max(0, k.z - gH) * 0.08)) * g.s;
         ctx.beginPath(); ctx.ellipse(g.sx, g.sy, rx, Math.max(1, rx * Math.min(0.5, (c.H / g.f) * 1.6)), 0, 0, Math.PI * 2); ctx.fill();
       }
     }
@@ -391,8 +576,53 @@ export class Renderer {
     // destello
     if (k.flashT > 0) { ctx.fillStyle = `rgba(255,250,220,${Math.min(0.92, k.flashT / 1.2)})`; ctx.fillRect(0, 0, vw, vh); }
 
-    // posición o globos
-    if (sim.mode === 'race') {
+    // posición, globos o supervivencia
+    if (sim.mode === 'runner') {
+      const hSize = big ? 13 : 9;
+      const hGap = big ? 15 : 10;
+      const hearts = k.hearts ?? 3;
+      for (let i = 0; i < 3; i++) {
+        const img = i < hearts ? this.sp.fx.heartFull : this.sp.fx.heartEmpty;
+        if (img) ctx.drawImage(img, L + i * hGap, pad, hSize, Math.round(hSize * 0.9));
+      }
+      const aliveCount = sim.karts.filter((o) => !o.eliminated).length;
+      this.text(`VIVOS ${aliveCount}/${sim.karts.length}`, L, pad + (big ? 15 : 11), big ? 7 : 5, '#c8f0ff');
+      const distM = Math.max(0, Math.round(k.distance || Math.max(0, (k.y - (k.startY || 0)) / 10)));
+      this.text(`${distM.toLocaleString('es-ES')} m`, R, pad, big ? 10 : 7, '#ffd23f', 'right');
+      this.text(fmtTime(k.eliminated ? (k.survived || k.elimAt || 0) : sim.raceTime), R, pad + (big ? 13 : 9), big ? 8 : 6, '#c8f0ff', 'right');
+      if (sim.started && sim.biomeBanner && sim.biomeBanner.t > 0) {
+        this.text(`¡${sim.biomeBanner.name.toUpperCase()}!`, vw / 2, Math.round(vh * 0.19), big ? 11 : 7, '#ffd23f', 'center');
+      }
+      if (!k.eliminated) {
+        const gap = Math.max(0, k.y - (sim.chaserY ?? k.y - 600));
+        const mw = big ? 84 : 50;
+        const mh = big ? 6 : 4;
+        const mx = Math.round(vw / 2 - mw / 2);
+        const my = vh - pad - mh - 2;
+        ctx.fillStyle = 'rgba(18,10,24,0.82)';
+        ctx.fillRect(mx - 1, my - 1, mw + 2, mh + 2);
+        const safe01 = Math.max(0.06, Math.min(1, gap / 650));
+        const dCol = gap < 150 ? '#ff4d5e' : gap < 320 ? '#ffd23f' : '#3ddc84';
+        ctx.fillStyle = dCol;
+        ctx.fillRect(mx, my, Math.round(mw * safe01), mh);
+        const cb = biomeAt(sim.chaserY ?? k.y);
+        const chSpec = this.sp.decor[cb.chaser];
+        if (chSpec && chSpec.c) {
+          const isz = big ? 14 : 9;
+          ctx.drawImage(chSpec.c, mx - isz - 3, my + mh / 2 - isz * 0.4, isz, Math.round(isz * 0.65));
+        }
+        this.text(`${Math.round(gap / 10)} m`, vw / 2, my - (big ? 10 : 7), big ? 6 : 4, dCol, 'center');
+        if (sim.started && gap < 150 && Math.floor(sim.time * 8) % 2 === 0) {
+          ctx.strokeStyle = 'rgba(255,46,76,0.85)';
+          ctx.lineWidth = big ? 4 : 2;
+          ctx.strokeRect(1, 1, vw - 2, vh - 2);
+        }
+      } else {
+        const targetName = c.target && c.target.ch ? c.target.ch.name : '';
+        this.text(`ELIMINADO · mirando a ${targetName}`, vw / 2, Math.round(vh * 0.68), big ? 7 : 5, '#ff8a7a', 'center');
+        this.text(`${distM.toLocaleString('es-ES')} m`, vw / 2, Math.round(vh * 0.68) + (big ? 11 : 8), big ? 8 : 6, '#ffd23f', 'center');
+      }
+    } else if (sim.mode === 'race') {
       const pc = k.place === 1 ? '#ffd23f' : k.place === 2 ? '#d8dce6' : k.place === 3 ? '#e8954a' : '#ffffff';
       this.text(`${k.place}º`, L, pad, big ? 24 : 14, pc);
       const lap = Math.max(1, Math.min(sim.laps, k.lap));
@@ -438,8 +668,8 @@ export class Renderer {
     this.text(`${Math.max(0, Math.round(Math.abs(k.v) * 0.5))}`, gx - (big ? 34 : 22), gy, big ? 14 : 9, k.boostT > 0 ? '#ffd23f' : '#ffffff', 'right');
     this.text('km/h', gx, gy + (big ? 6 : 4), big ? 6 : 4, '#c8f0ff', 'right');
 
-    // minimapa (1 jugador)
-    if (nViews === 1) this.drawMinimap(sim, R - 72, 34, 72);
+    // minimapa (1 jugador, excepto en supervivencia)
+    if (nViews === 1 && sim.mode !== 'runner') this.drawMinimap(sim, R - 72, 34, 72);
 
     // mensaje
     if (k.messageT > 0 && k.message) {
@@ -479,12 +709,13 @@ export class Renderer {
   drawSidePanel(sim, vp) {
     const ctx = this.ctx;
     ctx.save(); ctx.translate(vp.x, vp.y);
-    this.drawMinimap(sim, 8, 10, 112);
+    if (sim.mode !== 'runner' && this.t.minimap) this.drawMinimap(sim, 8, 10, 112);
     const sorted = [...sim.karts].sort((a, b) => a.place - b.place);
+    const x0 = sim.mode === 'runner' ? 16 : 128;
     sorted.forEach((k, i) => {
-      const col = k.human ? SLOT_COLORS[k.slot] : '#c8c0e0';
-      ctx.drawImage(this.sp.portraits[k.char], 128, 8 + i * 15, 12, 12);
-      this.text(`${k.place} ${k.ch.name}`, 144, 11 + i * 15, 6, col, 'left', false);
+      const col = k.eliminated ? '#7a6a8a' : k.human ? SLOT_COLORS[k.slot] : '#c8c0e0';
+      ctx.drawImage(this.sp.portraits[k.char], x0, 8 + i * 16, 12, 12);
+      this.text(`${k.place} ${k.ch.name}`, x0 + 16, 11 + i * 16, 6, col, 'left', false);
     });
     ctx.restore();
   }
@@ -493,10 +724,10 @@ export class Renderer {
     if (sim.started && sim.raceTime > 1) return;
     const ctx = this.ctx;
     if (!sim.started && sim.countdown > 3.05) {
-      const name = this.t.def.name.toUpperCase();
+      const name = (sim.mode === 'runner' && sim.biome ? sim.biome.name : this.t.def.name).toUpperCase();
       ctx.fillStyle = 'rgba(18,10,24,0.7)'; ctx.fillRect(0, this.H / 2 - 22, this.W, 44);
       this.text(name, this.W / 2, this.H / 2 - 12, 14, '#ffd23f', 'center');
-      const sub = sim.story && sim.story.obj ? sim.story.obj.toUpperCase() : sim.mode === 'battle' ? 'BATALLA DE GLOBOS' : `${sim.laps || LAPS} VUELTAS`;
+      const sub = sim.story && sim.story.obj ? sim.story.obj.toUpperCase() : sim.mode === 'runner' ? 'SUPERVIVENCIA ESTELAR' : sim.mode === 'battle' ? 'BATALLA DE GLOBOS' : `${sim.laps || LAPS} VUELTAS`;
       this.text(sub, this.W / 2, this.H / 2 + 6, 7, sim.story ? '#7ff6ff' : '#ffffff', 'center');
       return;
     }

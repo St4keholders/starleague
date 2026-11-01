@@ -159,6 +159,11 @@ export class Audio {
       case 'ready': this.tone(1046, 0.1, 'triangle', 0.15); this.tone(1568, 0.15, 'triangle', 0.15, null, 0.08); break;
       case 'select': this.tone(880, 0.06, 'square', 0.1); break;
       case 'join': this.tone(660, 0.08, 'square', 0.12); this.tone(990, 0.12, 'square', 0.12, null, 0.08); break;
+      case 'crash': this.tone(140, 0.32, 'sawtooth', 0.25, 45); this.noise(0.26, 0.28, 700, 140); break;
+      case 'heart': [587, 784, 988, 1175].forEach((f, i) => this.tone(f, 0.1, 'triangle', 0.16, null, i * 0.06)); break;
+      case 'danger': this.tone(880, 0.12, 'square', 0.14); this.tone(660, 0.14, 'square', 0.14, null, 0.13); break;
+      case 'biome': [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.14, 'triangle', 0.15, null, i * 0.08)); break;
+      case 'eliminated': [440, 349, 294, 196].forEach((f, i) => this.tone(f, 0.16, 'sawtooth', 0.18, null, i * 0.11)); break;
       default: break;
     }
   }

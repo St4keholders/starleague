@@ -590,6 +590,326 @@ function makeDecor() {
     rect(x, 7, 2, 2, 8, '#9a9ab0'); rect(x, 21, 2, 2, 8, '#9a9ab0'); disc(x, 8, 2, 2, '#ffd23f'); disc(x, 22, 2, 2, '#ffd23f');
     add('zorgstatue', c, 80);
   }
+  { // granero rojo de frente (barn)
+    const c = mkCanvas(56, 48), x = c.getContext('2d');
+    // techo gambrel gris oscuro con borde blanco
+    x.fillStyle = '#4a4e58';
+    x.beginPath(); x.moveTo(28, 2); x.lineTo(48, 11); x.lineTo(54, 22); x.lineTo(2, 22); x.lineTo(8, 11); x.closePath(); x.fill();
+    x.strokeStyle = '#f4f0e8'; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(2, 22); x.lineTo(8, 11); x.lineTo(28, 2); x.lineTo(48, 11); x.lineTo(54, 22); x.stroke();
+    // cuerpo rojo con tablas verticales
+    rect(x, 5, 22, 46, 26, '#c82e24');
+    rect(x, 5, 22, 6, 26, '#de3e32');
+    rect(x, 45, 22, 6, 26, '#a4221a');
+    for (let xx = 9; xx < 50; xx += 5) rect(x, xx, 22, 1, 26, '#9e2018');
+    // ventana superior del pajar
+    rect(x, 22, 11, 12, 8, '#241a18');
+    rect(x, 21, 10, 14, 1, '#f4f0e8'); rect(x, 21, 19, 14, 1, '#f4f0e8');
+    rect(x, 23, 16, 10, 3, '#e8a838');
+    // puerta doble con marco blanco y X
+    rect(x, 16, 27, 24, 21, '#a8221a');
+    rect(x, 16, 27, 24, 2, '#f4f0e8'); rect(x, 16, 27, 2, 21, '#f4f0e8'); rect(x, 38, 27, 2, 21, '#f4f0e8'); rect(x, 27, 27, 2, 21, '#f4f0e8');
+    x.strokeStyle = '#f4f0e8'; x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(17, 28); x.lineTo(27, 47); x.moveTo(27, 28); x.lineTo(17, 47);
+    x.moveTo(29, 28); x.lineTo(39, 47); x.moveTo(39, 28); x.lineTo(29, 47);
+    x.stroke();
+    add('barn', c, 120);
+  }
+  { // tractor de frente (tractor) y de lado (tractor_side)
+    const c = mkCanvas(36, 32), x = c.getContext('2d');
+    // ruedas traseras grandes
+    rect(x, 2, 14, 7, 18, '#1e1e24'); rect(x, 3, 16, 5, 14, '#2e2e36'); rect(x, 4, 20, 3, 6, '#f2b824');
+    rect(x, 27, 14, 7, 18, '#1e1e24'); rect(x, 28, 16, 5, 14, '#2e2e36'); rect(x, 29, 20, 3, 6, '#f2b824');
+    // cabina negra y techo amarillo
+    rect(x, 10, 4, 16, 14, '#1c2026');
+    rect(x, 12, 6, 12, 8, '#7ad8ff'); rect(x, 17, 6, 2, 8, '#1c2026');
+    rect(x, 9, 2, 18, 3, '#f5ba1e');
+    // capó amarillo y parrilla
+    rect(x, 9, 15, 18, 13, '#f5ba1e'); rect(x, 11, 14, 14, 3, '#ffd44c');
+    rect(x, 13, 19, 10, 7, '#34363e');
+    for (let yy = 20; yy <= 24; yy += 2) rect(x, 14, yy, 8, 1, '#7a7e8a');
+    // faros y escape
+    disc(x, 10, 20, 2, '#fff8b8'); disc(x, 26, 20, 2, '#fff8b8');
+    rect(x, 8, 5, 2, 10, '#3a3a44');
+    add('tractor', c, 70);
+
+    const cs = mkCanvas(42, 30), xs = cs.getContext('2d');
+    // cabina y capó de lado
+    rect(xs, 6, 14, 28, 10, '#f5ba1e'); rect(xs, 6, 14, 28, 3, '#ffd44c');
+    rect(xs, 18, 3, 15, 13, '#1c2026'); rect(xs, 20, 5, 11, 8, '#7ad8ff');
+    rect(xs, 17, 2, 17, 2, '#f5ba1e');
+    rect(xs, 10, 5, 2, 9, '#3a3a44');
+    // rueda trasera grande y delantera
+    disc(xs, 27, 21, 9, '#1e1e24'); disc(xs, 27, 21, 5, '#f5ba1e'); disc(xs, 27, 21, 2, '#3a3a44');
+    disc(xs, 10, 23, 6, '#1e1e24'); disc(xs, 10, 23, 3, '#f5ba1e');
+    add('tractor_side', cs, 70);
+  }
+  { // paca de heno redonda dorada (haybale)
+    const c = mkCanvas(24, 20), x = c.getContext('2d');
+    ell(x, 12, 11, 11, 8, '#d99826');
+    ell(x, 12, 9, 10, 6, '#f2b838');
+    ell(x, 11, 8, 6, 3, '#ffd25a');
+    // cuerdas y espiral lateral
+    rect(x, 7, 4, 1, 14, '#8a5418'); rect(x, 16, 4, 1, 14, '#8a5418');
+    rect(x, 4, 10, 3, 1, '#a86a1c'); rect(x, 17, 12, 3, 1, '#a86a1c');
+    add('haybale', c, 34);
+  }
+  { // tramo de cerca de madera: 3 postes y 2 tablas (fence)
+    const c = mkCanvas(48, 20), x = c.getContext('2d');
+    // 2 tablas horizontales
+    rect(x, 1, 6, 46, 4, '#9a6234'); rect(x, 1, 6, 46, 1, '#ba7e4a');
+    rect(x, 1, 13, 46, 4, '#8a5428'); rect(x, 1, 13, 46, 1, '#aa6e3c');
+    // 3 postes verticales
+    for (const px of [4, 22, 40]) {
+      rect(x, px, 2, 5, 18, '#7a4620');
+      rect(x, px, 2, 2, 18, '#9a6032');
+      rect(x, px + 1, 1, 3, 1, '#ba7e4a');
+    }
+    add('fence', c, 80);
+  }
+  { // calabaza naranja normal (pumpkin) e iluminada (pumpkin_lit)
+    const drawBasePumpkin = (x) => {
+      rect(x, 8, 1, 2, 3, '#3a6a22');
+      ell(x, 9, 9, 8, 6, '#d95814');
+      ell(x, 9, 9, 6, 6, '#f26e1c');
+      ell(x, 9, 9, 3, 6, '#ff8626');
+      rect(x, 7, 5, 2, 2, '#ffa84a');
+    };
+    const c1 = mkCanvas(18, 16), x1 = c1.getContext('2d');
+    drawBasePumpkin(x1);
+    add('pumpkin', c1, 20);
+
+    const c2 = mkCanvas(18, 16), x2 = c2.getContext('2d');
+    drawBasePumpkin(x2);
+    rect(x2, 5, 7, 2, 2, '#fff47a'); rect(x2, 11, 7, 2, 2, '#fff47a');
+    rect(x2, 5, 11, 8, 2, '#ffd23f'); rect(x2, 7, 10, 4, 1, '#fff47a');
+    add('pumpkin_lit', c2, 20);
+  }
+  { // silo de granja con techo de cúpula (silo)
+    const c = mkCanvas(30, 58), x = c.getContext('2d');
+    // cúpula superior plateada
+    disc(x, 15, 14, 11, '#b8c0cc');
+    disc(x, 13, 12, 8, '#dce2ec');
+    rect(x, 4, 14, 22, 42, '#c6362c');
+    rect(x, 4, 14, 6, 42, '#de4a3e');
+    rect(x, 20, 14, 6, 42, '#9e261e');
+    // aros metálicos y escalera
+    for (let yy = 16; yy < 54; yy += 7) rect(x, 4, yy, 22, 2, '#8a929e');
+    rect(x, 14, 14, 3, 42, '#5a606a');
+    for (let yy = 16; yy < 54; yy += 3) rect(x, 14, yy, 3, 1, '#d8dee8');
+    add('silo', c, 70);
+  }
+  { // molino de granja de metal con rueda roja y blanca (windmill2)
+    const c = mkCanvas(34, 56), x = c.getContext('2d');
+    x.strokeStyle = '#6e7682'; x.lineWidth = 2;
+    x.beginPath();
+    x.moveTo(17, 16); x.lineTo(6, 55);
+    x.moveTo(17, 16); x.lineTo(28, 55);
+    x.moveTo(11, 30); x.lineTo(23, 30);
+    x.moveTo(8, 43); x.lineTo(26, 43);
+    x.moveTo(11, 30); x.lineTo(26, 43);
+    x.moveTo(23, 30); x.lineTo(8, 43);
+    x.stroke();
+    // rueda de paletas roja y blanca
+    disc(x, 17, 15, 12, '#e0342a');
+    disc(x, 17, 15, 9, '#f4f4f8');
+    disc(x, 17, 15, 6, '#e0342a');
+    x.strokeStyle = '#4a505a'; x.lineWidth = 1.5;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      x.beginPath(); x.moveTo(17, 15); x.lineTo(17 + Math.cos(a) * 12, 15 + Math.sin(a) * 12); x.stroke();
+    }
+    disc(x, 17, 15, 2, '#3a4048');
+    add('windmill2', c, 60);
+  }
+  { // corazón rojo brillante flotando (heart, recogible)
+    const c = mkCanvas(20, 18), x = c.getContext('2d');
+    disc(x, 6, 6, 5, '#ff2e4c');
+    disc(x, 14, 6, 5, '#ff2e4c');
+    x.fillStyle = '#ff2e4c';
+    x.beginPath(); x.moveTo(1, 7); x.lineTo(10, 17); x.lineTo(19, 7); x.closePath(); x.fill();
+    disc(x, 6, 5, 3, '#ff6880');
+    rect(x, 4, 4, 2, 2, '#ffffff');
+    add('heart', c, 18, 10);
+  }
+  { // burbuja azul con brillo (shieldpick, recogible)
+    const c = mkCanvas(20, 20), x = c.getContext('2d');
+    disc(x, 10, 10, 8, '#2898ff');
+    disc(x, 10, 10, 6, '#6ad2ff');
+    disc(x, 9, 9, 4, '#b8f2ff');
+    rect(x, 6, 5, 3, 2, '#ffffff');
+    rect(x, 5, 7, 2, 2, '#ffffff');
+    rect(x, 13, 13, 2, 2, '#ffffff');
+    add('shieldpick', c, 20, 10);
+  }
+  { // mechón de trigo/pasto alto naranja (grasstuft) y verde lima (grasstuft_jungle)
+    const drawTuft = (x, cDark, cMid, cTip) => {
+      rect(x, 6, 6, 2, 8, cDark);
+      rect(x, 3, 7, 2, 7, cDark);
+      rect(x, 9, 7, 2, 7, cDark);
+      rect(x, 2, 4, 2, 4, cMid);
+      rect(x, 6, 2, 2, 5, cMid);
+      rect(x, 10, 4, 2, 4, cMid);
+      rect(x, 1, 2, 2, 2, cTip);
+      rect(x, 6, 0, 2, 2, cTip);
+      rect(x, 11, 2, 2, 2, cTip);
+    };
+    const c1 = mkCanvas(14, 14), x1 = c1.getContext('2d');
+    drawTuft(x1, '#b85a14', '#e8862a', '#ffd25a');
+    add('grasstuft', c1, 14);
+
+    const c2 = mkCanvas(14, 14), x2 = c2.getContext('2d');
+    drawTuft(x2, '#1e7a36', '#3ddc68', '#b8ff4a');
+    add('grasstuft_jungle', c2, 14);
+  }
+  { // oveja blanca esponjosa (sheep y sheep2, 2 cuadros de caminar)
+    for (let f = 0; f < 2; f++) {
+      const c = mkCanvas(24, 18), x = c.getContext('2d');
+      // patas negras alternadas
+      rect(x, 6 + f * 2, 13, 2, 5, '#222228');
+      rect(x, 10 - f, 13, 2, 4, '#222228');
+      rect(x, 14 + f, 13, 2, 5, '#222228');
+      rect(x, 17 - f * 2, 13, 2, 4, '#222228');
+      // lana blanca esponjosa
+      ell(x, 12, 9, 8, 5, '#e8ecf2');
+      disc(x, 8, 8, 4, '#ffffff');
+      disc(x, 13, 7, 5, '#ffffff');
+      disc(x, 16, 9, 4, '#f4f6fa');
+      // cabeza negra con oreja y ojo blanco
+      disc(x, 5, 8, 3, '#26242c');
+      rect(x, 3, 6, 2, 2, '#1a1820');
+      rect(x, 4, 7, 1, 1, '#ffffff');
+      add(f === 0 ? 'sheep' : 'sheep2', c, 26);
+    }
+  }
+  { // auto flotante neón (hovercar, Ciudad Neón)
+    const c = mkCanvas(36, 18), x = c.getContext('2d');
+    // propulsores inferiores cian brillante
+    rect(x, 5, 13, 8, 3, '#2ef0ff');
+    rect(x, 23, 13, 8, 3, '#2ef0ff');
+    // chasis aerodinámico morado/azul oscuro con franja magenta neón
+    rect(x, 2, 8, 32, 6, '#261a4a');
+    rect(x, 4, 7, 28, 3, '#3c2a70');
+    rect(x, 2, 10, 32, 2, '#ff2ea6');
+    // cabina de cristal cian
+    rect(x, 10, 3, 16, 5, '#182438');
+    rect(x, 12, 4, 12, 3, '#7ff6ff');
+    // faros delanteros y traseros
+    rect(x, 1, 8, 2, 3, '#fff680');
+    rect(x, 33, 8, 2, 3, '#ff4d5e');
+    add('hovercar', c, 50, 12);
+  }
+  { // arco de bienvenida entre biomas (gate)
+    const c = mkCanvas(72, 48), x = c.getContext('2d');
+    // dos postes laterales de madera y piedra con banderines
+    rect(x, 4, 8, 7, 40, '#6a4020'); rect(x, 5, 8, 2, 40, '#9a6234');
+    rect(x, 61, 8, 7, 40, '#6a4020'); rect(x, 62, 8, 2, 40, '#9a6234');
+    rect(x, 2, 42, 11, 6, '#5a5e68'); rect(x, 59, 42, 11, 6, '#5a5e68');
+    // viga superior con letrero y estrellas
+    rect(x, 2, 4, 68, 12, '#7a4a24');
+    rect(x, 4, 6, 64, 8, '#1e162b');
+    rect(x, 4, 5, 64, 1, '#ffd23f');
+    rect(x, 4, 14, 64, 1, '#ffd23f');
+    for (let i = 0; i < 7; i++) {
+      rect(x, 9 + i * 9, 8, 5, 4, i % 2 === 0 ? '#ffd23f' : '#7ff6ff');
+    }
+    // banderines colgantes bajo la viga
+    for (let i = 0; i < 8; i++) {
+      const bx = 11 + i * 6;
+      x.fillStyle = ['#ff4d5e', '#ffd23f', '#3ddc84', '#59c8ff'][i % 4];
+      x.beginPath(); x.moveTo(bx, 16); x.lineTo(bx + 5, 16); x.lineTo(bx + 2.5, 21); x.closePath(); x.fill();
+    }
+    add('gate', c, 160);
+  }
+  { // perseguidores de los 8 biomas (120-200 u)
+    // 1. stampede (vacas y ovejas en nube de polvo)
+    const c1 = mkCanvas(64, 34), x1 = c1.getContext('2d');
+    for (let i = 0; i < 6; i++) {
+      ell(x1, 8 + i * 10, 24 - (i % 2) * 3, 9, 7, i % 2 ? '#d89a5a' : '#c48244');
+    }
+    // vaca al centro y ovejas a los lados
+    rect(x1, 24, 10, 16, 12, '#f4f4f8'); rect(x1, 26, 12, 5, 5, '#262228'); rect(x1, 34, 14, 4, 4, '#262228');
+    rect(x1, 27, 6, 10, 7, '#e8e4ec'); rect(x1, 25, 4, 3, 3, '#d8c8b0'); rect(x1, 36, 4, 3, 3, '#d8c8b0');
+    ell(x1, 20, 11, 5, 3, '#ff9aa8');
+    disc(x1, 12, 16, 6, '#ffffff'); disc(x1, 12, 15, 3, '#26242c');
+    disc(x1, 52, 16, 6, '#ffffff'); disc(x1, 52, 15, 3, '#26242c');
+    add('stampede', c1, 150);
+
+    // 2. wave (ola azul gigante con espuma blanca)
+    const c2 = mkCanvas(64, 38), x2 = c2.getContext('2d');
+    rect(x2, 2, 14, 60, 22, '#1458b8');
+    rect(x2, 4, 10, 56, 14, '#2478e0');
+    rect(x2, 6, 7, 52, 8, '#4ea4ff');
+    for (let i = 0; i < 7; i++) {
+      disc(x2, 7 + i * 8, 7 + (i % 2) * 2, 5, '#ffffff');
+      disc(x2, 9 + i * 8, 10, 4, '#cfe9ff');
+    }
+    add('wave', c2, 160);
+
+    // 3. avalanche (frente de nieve y hielo)
+    const c3 = mkCanvas(64, 38), x3 = c3.getContext('2d');
+    for (let i = 0; i < 6; i++) {
+      disc(x3, 9 + i * 9, 22 - (i % 2) * 4, 11, '#d8ecff');
+      disc(x3, 9 + i * 9, 19 - (i % 2) * 4, 9, '#ffffff');
+    }
+    rect(x3, 16, 8, 7, 7, '#8ad8ff'); rect(x3, 38, 10, 8, 6, '#8ad8ff');
+    add('avalanche', c3, 160);
+
+    // 4. lavaflow (río de lava con burbujas incandescentes)
+    const c4 = mkCanvas(64, 34), x4 = c4.getContext('2d');
+    rect(x4, 2, 14, 60, 18, '#4a1410');
+    for (let i = 0; i < 6; i++) {
+      disc(x4, 8 + i * 10, 20, 9, '#d83814');
+      disc(x4, 8 + i * 10, 18, 6, '#ff7a1a');
+      disc(x4, 9 + i * 10, 16, 3, '#ffd23f');
+    }
+    add('lavaflow', c4, 160);
+
+    // 5. goowave (ola de baba verde ácida)
+    const c5 = mkCanvas(64, 36), x5 = c5.getContext('2d');
+    for (let i = 0; i < 6; i++) {
+      disc(x5, 8 + i * 10, 21 - (i % 2) * 3, 10, '#2aa83a');
+      disc(x5, 8 + i * 10, 18 - (i % 2) * 3, 7, '#76ea3a');
+      disc(x5, 10 + i * 10, 15, 3, '#d8ff7a');
+    }
+    disc(x5, 22, 12, 3, '#a84dff'); disc(x5, 44, 14, 3, '#a84dff');
+    add('goowave', c5, 160);
+
+    // 6. glitchstorm (tormenta de glitch cian y magenta)
+    const c6 = mkCanvas(64, 38), x6 = c6.getContext('2d');
+    rect(x6, 4, 8, 56, 26, '#140c2c');
+    for (let i = 0; i < 22; i++) {
+      const gx = 4 + ((i * 17) % 50);
+      const gy = 6 + ((i * 11) % 24);
+      const gw = 4 + (i % 3) * 4;
+      const gh = 3 + (i % 2) * 3;
+      rect(x6, gx, gy, gw, gh, ['#ff2ea6', '#2ef0ff', '#ffd23f', '#b44dff'][i % 4]);
+    }
+    add('glitchstorm', c6, 165);
+
+    // 7. blackhole (espiral morada y horizonte negro)
+    const c7 = mkCanvas(56, 44), x7 = c7.getContext('2d');
+    disc(x7, 28, 22, 20, '#3a1068');
+    disc(x7, 28, 22, 16, '#7a28d8');
+    disc(x7, 28, 22, 12, '#c86aff');
+    disc(x7, 28, 22, 8, '#06020c');
+    x7.strokeStyle = '#7ff6ff'; x7.lineWidth = 2;
+    x7.beginPath(); x7.arc(28, 22, 10, 0.3, 2.6); x7.stroke();
+    x7.beginPath(); x7.arc(28, 22, 14, 3.4, 5.7); x7.stroke();
+    add('blackhole', c7, 175, 8);
+
+    // 8. zorgship (nave de Zorg verde con cúpula y luces)
+    const c8 = mkCanvas(68, 38), x8 = c8.getContext('2d');
+    ell(x8, 34, 14, 14, 9, '#7ff6ff');
+    ell(x8, 34, 22, 31, 9, '#2a3830');
+    ell(x8, 34, 20, 27, 7, '#465e4e');
+    for (let i = 0; i < 6; i++) {
+      disc(x8, 12 + i * 9, 22, 3, i % 2 === 0 ? '#9dff3a' : '#ffd23f');
+    }
+    rect(x8, 26, 29, 16, 7, '#9dff3a');
+    add('zorgship', c8, 190, 14);
+  }
   return D;
 }
 
@@ -682,6 +1002,30 @@ function makeFx() {
   { const c = mkCanvas(30, 30), x = c.getContext('2d');
     x.fillStyle = 'rgba(170,230,255,0.55)'; x.fillRect(2, 2, 26, 26); x.strokeStyle = '#e6fbff'; x.lineWidth = 2; x.strokeRect(2, 2, 26, 26);
     rect(x, 5, 5, 6, 2, '#ffffff'); add('ice', c, 40); }
+  { // corazón pixel-art lleno y vacío (HUD)
+    const rows = [
+      ' 111 111 ',
+      '122111111',
+      '121111111',
+      '111111111',
+      ' 1111111 ',
+      '  11111  ',
+      '   111   ',
+      '    1    ',
+    ];
+    const cf = mkCanvas(11, 10), xf = cf.getContext('2d');
+    const ce = mkCanvas(11, 10), xe = ce.getContext('2d');
+    for (let y = 0; y < rows.length; y++) {
+      for (let x = 0; x < rows[y].length; x++) {
+        const ch = rows[y][x];
+        if (ch === ' ') continue;
+        rect(xf, x + 1, y + 1, 1, 1, ch === '2' ? '#ffb8c4' : '#ff3b52');
+        rect(xe, x + 1, y + 1, 1, 1, '#3a2234');
+      }
+    }
+    F.heartFull = outline(cf, '#180814');
+    F.heartEmpty = outline(ce, '#180814');
+  }
   return F;
 }
 

@@ -2,6 +2,8 @@
 // para dibujar la vista del jugador con el mismo motor gráfico.
 import { charById } from './constants.js';
 import { wrapAngle } from './geometry.js';
+import { CHUNK_LEN } from './runner/config.js';
+import { centerX, halfW, biomeAt, isHazardAt } from './runner/layout.js';
 
 export const PROJ_TYPES = ['gum', 'snow', 'honey'];
 export const FX_TYPES = ['ring', 'bolt', 'boom'];
@@ -18,14 +20,21 @@ export class MirrorSim {
   constructor(init, track) {
     this.track = track;
     this.arena = !!track.arena;
+    this.runner = !!init.runner || init.mode === 'runner';
     this.mode = init.mode;
     this.laps = init.laps;
     this.time = 0; this.raceTime = 0; this.started = false; this.countdown = 4.2; this.battleLeft = 0;
+    this.chaserY = 0;
+    this.leaderY = 320;
+    this.taken = new Set();
+    this.biome = this.runner ? biomeAt(300) : null;
+    this.biomeBanner = { name: this.biome ? this.biome.name : '', t: this.runner ? 2.0 : 0 };
     this.karts = init.karts.map(([char, human, slot, boss, skin, ally], i) => ({
       id: i, char, ch: charById(char), human: !!human, slot, boss: boss || 0, skin: skin || null, ally: !!ally,
       x: 0, y: 0, z: 0, a: 0, camA: 0, spinVis: 0, drift: 0, driftLevel: 0,
       boostT: 0, surface: 'road', v: 0, invulnT: 0, spinT: 0, frozenT: 0, shieldT: 0, stickyT: 0,
-      eliminated: false, balloons: 3, fallT: 0, place: i + 1, lap: 1, finished: false, finishTime: 0,
+      eliminated: false, balloons: 3, hearts: 3, startY: 300, distance: 0, survived: 0, elimAt: 0,
+      fallT: 0, place: i + 1, lap: 1, finished: false, finishTime: 0,
       flashT: 0, rouletteT: 0, item: null, power: 0, charges: 0,
       message: '', messageT: 0, init: false,
     }));
@@ -41,6 +50,22 @@ export class MirrorSim {
     this.offset = null;
   }
 
+  groundAt(x, y, prevZ = 0) {
+    if (!this.runner || !this.track || !this.track.getChunk) return 0;
+    const ci = Math.floor(y / CHUNK_LEN);
+    let maxH = 0;
+    for (let cIdx = Math.max(0, ci - 1); cIdx <= ci + 1; cIdx++) {
+      const ch = this.track.getChunk(cIdx);
+      if (!ch || !ch.platforms) continue;
+      for (const pl of ch.platforms) {
+        if (x >= pl.x0 && x <= pl.x1 && y >= pl.y0 && y <= pl.y1) {
+          if (prevZ >= pl.h - 6 && pl.h > maxH) maxH = pl.h;
+        }
+      }
+    }
+    return maxH;
+  }
+
   push(s) {
     const now = performance.now() / 1000;
     const off = s.ts - now;
@@ -50,6 +75,12 @@ export class MirrorSim {
     if (this.snaps.length > 12) this.snaps.shift();
     // datos que no se interpolan: se toman de la última foto
     this.raceTime = s.rt; this.started = !!s.st; this.countdown = s.cd; this.battleLeft = s.bl;
+    if (this.runner) {
+      if (typeof s.ch === 'number') this.chaserY = s.ch;
+      if (Array.isArray(s.tk)) {
+        for (const id of s.tk) this.taken.add(id);
+      }
+    }
     for (let i = 0; i < this.boxes.length; i++) this.boxes[i].t = s.b.charCodeAt(i) === 49 ? 1 : 0;
     this.projs = s.p.map(([t, x, y]) => ({ type: PROJ_TYPES[t], x, y, r: t === 1 ? 15 : t === 2 ? 8 : 9 }));
     this.puddles = s.d.map(([t, x, y, r]) => ({ type: t ? 'salsa' : 'oil', x, y, r }));
@@ -65,6 +96,8 @@ export class MirrorSim {
     k.rouletteT = h.item === '?' ? 1 : 0;
     k.item = h.item && h.item !== '?' ? h.item : null;
     k.power = h.power || 0; k.charges = h.charges || 0;
+    if (typeof h.hearts === 'number') k.hearts = h.hearts;
+    if (typeof h.dist === 'number') k.distance = h.dist;
     k.message = h.msg || ''; k.messageT = h.msg ? 1 : 0;
     k.flashT = h.fl || 0; k.v = h.v || 0;
     this.objectiveText = h.obj || '';
@@ -93,6 +126,10 @@ export class MirrorSim {
       };
       this.fx = s1.fx || null;
     }
+    if (this.runner && s0 && s1 && typeof s0.ch === 'number' && typeof s1.ch === 'number') {
+      this.chaserY = s0.ch + (s1.ch - s0.ch) * t;
+    }
+    let maxAliveY = 300;
     this.karts.forEach((k, i) => {
       const a = s0.k[i], b = s1.k[i];
       if (!a || !b) return;
@@ -115,13 +152,57 @@ export class MirrorSim {
       k.fallT = f & F.FALL ? 1 : 0;
       k.balloons = b[6];
       k.place = b[7];
-      if (!k.init) { k.camA = k.a; k.init = true; }
+      if (b[8] !== undefined) k.hearts = b[8];
+      if (!k.init) { k.camA = k.a; k.startY = k.y || 300; k.init = true; }
       k.camA += wrapAngle(k.a - k.camA) * Math.min(1, dt * (k.drift ? 4.2 : 7));
       if (k.v === 0 && !k.human) k.v = 100;
+      if (this.runner) {
+        if (!k.eliminated) {
+          if (k.y > maxAliveY) maxAliveY = k.y;
+          k.distance = Math.max(k.distance || 0, Math.round(Math.max(0, (k.y - (k.startY || 300)) / 10)));
+          k.survived = this.raceTime;
+          if (k.z <= 2 && this.track && this.track.cutGrass && this.track.getChunk) {
+            const ch = this.track.getChunk(Math.max(0, Math.floor(k.y / CHUNK_LEN)));
+            if (ch && isHazardAt(ch, k.x, k.y) === 'grass') {
+              this.track.cutGrass(k.x, k.y, 9);
+            }
+          }
+        } else if (!k.elimAt) {
+          k.elimAt = this.raceTime;
+        }
+      }
       // efectos locales
       if (k.boostT && Math.random() < 0.7) this.flame(k);
       if (k.driftLevel && Math.random() < 0.6) this.spark(k, k.driftLevel === 2 ? '#ffa21e' : '#59c8ff');
     });
+    if (this.runner) {
+      this.leaderY = maxAliveY;
+      const nb = biomeAt(this.leaderY);
+      if (this.biome && nb.rawIndex !== this.biome.rawIndex) {
+        this.biome = nb;
+        this.biomeBanner = { name: nb.name, t: 2.0 };
+      }
+      if (this.biomeBanner && this.biomeBanner.t > 0) {
+        this.biomeBanner.t = Math.max(0, this.biomeBanner.t - dt);
+      }
+      if (this.started && Math.random() < 0.85 && this.track && this.track.seed) {
+        const cb = biomeAt(this.chaserY);
+        const cx = centerX(this.track.seed, this.chaserY);
+        const hw = halfW(this.track.seed, this.chaserY);
+        const px = cx + (Math.random() * 2 - 1) * (hw - 20);
+        const py = this.chaserY + (Math.random() - 0.5) * 18;
+        const pCol =
+          cb.chaser === 'wave' ? '#7ff6ff'
+          : cb.chaser === 'avalanche' ? '#f4f8ff'
+          : cb.chaser === 'lavaflow' ? '#ff6a1a'
+          : cb.chaser === 'goowave' ? '#7fe830'
+          : cb.chaser === 'glitchstorm' ? '#ff3ad9'
+          : cb.chaser === 'blackhole' ? '#b44dff'
+          : cb.chaser === 'zorgship' ? '#9dff3a'
+          : '#d9b382';
+        this.part(px, py, 6 + Math.random() * 16, (Math.random() - 0.5) * 40, 60 + Math.random() * 60, 30 + Math.random() * 50, 0.35, pCol, 3);
+      }
+    }
     this.updateParts(dt);
   }
 
@@ -158,6 +239,7 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
 export function raceInitMsg(sim, trackIndex) {
   return {
     t: 'raceinit', track: trackIndex, mode: sim.mode, laps: sim.laps,
+    runner: sim.runner ? { seed: sim.seed, difficulty: sim.diff } : null,
     karts: sim.karts.map((k) => [k.char, k.human ? 1 : 0, k.slot, k.boss || 0, k.skin || '', k.ally ? 1 : 0]),
     boxes: sim.boxes.map((b) => [r1(b.x), r1(b.y)]),
     hazards: sim.hazards.map((h) => [h.type, h.period || 0, h.skin || '']),
@@ -169,12 +251,14 @@ export function raceInitMsg(sim, trackIndex) {
 export function snapshotMsg(sim, sfx) {
   return {
     t: 'snap', ts: r3(sim.time), rt: r3(sim.raceTime), st: sim.started ? 1 : 0, cd: r3(sim.countdown), bl: r1(sim.battleLeft),
+    ch: sim.runner ? r1(sim.chaserY || 0) : undefined,
+    tk: sim.runner && sim.recentTaken && sim.recentTaken.length ? sim.recentTaken.splice(0) : undefined,
     k: sim.karts.map((k) => {
       let f = 0;
       if (k.drift > 0) f |= F.DRIFT_R; else if (k.drift < 0) f |= F.DRIFT_L;
       if (k.driftLevel === 1) f |= F.LV1; else if (k.driftLevel === 2) f |= F.LV2;
       if (k.boostT > 0) f |= F.BOOST;
-      if (k.surface === 'off' && Math.abs(k.v) > 60) f |= F.OFF;
+      if ((k.surface === 'off' || k.surface === 'grass') && Math.abs(k.v) > 60) f |= F.OFF;
       if (k.invulnT > 0) f |= F.INVULN;
       if (k.spinT > 0) f |= F.SPIN;
       if (k.frozenT > 0) f |= F.FROZEN;
@@ -183,7 +267,7 @@ export function snapshotMsg(sim, sfx) {
       if (k.eliminated) f |= F.ELIM;
       if (k.fallT > 0) f |= F.FALL;
       if (k.finished) f |= F.FINISHED;
-      return [r1(k.x), r1(k.y), r1(k.z), r3(k.a), r1(k.spinVis), f, k.balloons, k.place];
+      return [r1(k.x), r1(k.y), r1(k.z), r3(k.a), r1(k.spinVis), f, k.balloons, k.place, k.hearts ?? 3];
     }),
     b: sim.boxes.map((b) => (b.t > 0 ? '1' : '0')).join(''),
     p: sim.projs.map((p) => [PROJ_TYPES.indexOf(p.type), r1(p.x), r1(p.y)]),

@@ -301,7 +301,7 @@ function Lobby({ st, host, qr, url, portraits, onPlayHere, steerMode, onSteer, t
         <button className="btn gold start" disabled={!n} onClick={() => host.startGame()}>{n ? '¡Empezar!' : 'Esperando jugadores'}</button>
       </div>
       <div className="lobby-foot">
-        <span className="kb-help">El carro acelera solo · Teclado de respaldo: <b>J con WASD</b> (W para unirse): A/D gira, S frena, Espacio derrapa, Q objeto, E poder · <b>J con flechas</b> (↑ para unirse): ←/→ gira, ↓ frena, Shift der. derrapa, «-» objeto, «.» poder · En el lobby: A/D o ←/→ cambia personaje</span>
+        <span className="kb-help">El carro acelera solo · Teclado de respaldo: <b>J con WASD</b> (W para unirse / saltar): A/D gira, S frena, Espacio derrapa, Q objeto, E poder · <b>J con flechas</b> (↑ para unirse / saltar): ←/→ gira, ↓ frena, Shift der. derrapa, «-» objeto, «.» poder · En el lobby: A/D o ←/→ cambia personaje</span>
         <span className="foot-btns">
           <button className="mini" onClick={() => host.toggleMute()}>{st.muted ? '🔇 Sonido' : '🔊 Sonido'}</button>
           <button className="mini" onClick={fullscreen}>⛶ Pantalla completa</button>
@@ -331,12 +331,13 @@ function nameFor(r) {
 function Results({ st, host, portraits }) {
   const res = st.results || [];
   const battle = st.mode === 'battle';
+  const runner = st.mode === 'runner';
   const cupLast = st.cup && st.cup.current >= st.cup.total - 1;
-  const nextLabel = st.cup ? (cupLast ? 'Ver podio' : 'Siguiente carrera') : 'Volver al lobby';
+  const nextLabel = runner ? 'Otra partida' : st.cup ? (cupLast ? 'Ver podio' : 'Siguiente carrera') : 'Volver al lobby';
   return (
     <div className="overlay center">
       <div className="card results">
-        <h2>{battle ? 'Batalla terminada' : st.raceName}</h2>
+        <h2>{runner ? 'Supervivencia Estelar' : battle ? 'Batalla terminada' : st.raceName}</h2>
         {st.cup && <div className="sub">Copa · carrera {st.cup.current + 1} de {st.cup.total}</div>}
         <table>
           <tbody>
@@ -345,13 +346,29 @@ function Results({ st, host, portraits }) {
                 <td className="pl">{r.place}º</td>
                 <td><img src={portraits[r.char]} alt="" /></td>
                 <td className="nm">{nameFor(r)} {r.human && <span className="tag">{SLOT_NAMES[r.slot]}</span>}</td>
-                <td className="tm">{battle ? `${r.balloons} globo${r.balloons === 1 ? '' : 's'}` : r.time !== null ? (r.est ? '~' : '') + fmtTime(r.time) : '—'}</td>
+                <td className="tm">
+                  {runner
+                    ? `Sobrevivió ${fmtTime(r.time || 0)} · ${(r.distance || 0).toLocaleString('es-ES')} m`
+                    : battle
+                      ? `${r.balloons} globo${r.balloons === 1 ? '' : 's'}`
+                      : r.time !== null ? (r.est ? '~' : '') + fmtTime(r.time) : '—'}
+                </td>
+                {runner && (
+                  <td className="rs">
+                    {r.reason === 'ganador'
+                      ? '¡Último en pie!'
+                      : r.reason === 'vidas'
+                        ? 'Sin vidas'
+                        : `Lo atrapó ${r.chaserName || 'el perseguidor'}`}
+                  </td>
+                )}
                 {st.cup && <td className="pt">+{r.points} <b>{r.total}</b></td>}
               </tr>
             ))}
           </tbody>
         </table>
         <button className="btn gold" onClick={() => host.next()} autoFocus>{nextLabel}</button>
+        {runner && <button className="btn" onClick={() => host.toLobby()}>Volver al lobby</button>}
         {st.cup && !cupLast && <button className="btn" onClick={() => host.toLobby()}>Abandonar copa</button>}
       </div>
     </div>
@@ -481,12 +498,21 @@ function HostPad({ host, st, steerMode, tilt, portrait, items }) {
   const dirs = useRef({ l: false, r: false });
   const steer = (side, v) => () => { dirs.current[side] = v; li.steer = (dirs.current.r ? 1 : 0) - (dirs.current.l ? 1 : 0); };
   const tiltOn = steerMode === 'tilt';
+  const runner = st.mode === 'runner' || h.mode === 'runner';
   const driftCls = 'drift' + (h.drift === 2 ? ' lv2' : h.drift === 1 ? ' lv1' : '');
   const driftBtn = <PadBtn cls={driftCls} onDown={() => { li.drift = true; }} onUp={() => { li.drift = false; }}>DERRAPE</PadBtn>;
+  const jumpBtn = <PadBtn cls="jump" onDown={() => host.localPress('jump')}>SALTO</PadBtn>;
   return (
     <div className={'pad view host-pad' + (tiltOn ? ' tilt' : '')} style={{ '--c': SLOT_COLORS[st.local] }}>
       <div className="pad-col left">
-        {!tiltOn && <div className="pad-col-big">{driftBtn}</div>}
+        {runner ? (
+          <>
+            <div className="pad-col-big">{jumpBtn}</div>
+            {!tiltOn && driftBtn}
+          </>
+        ) : (
+          !tiltOn && <div className="pad-col-big">{driftBtn}</div>
+        )}
         <PadBtn cls="item" onDown={() => host.localPress('item')}>OBJETO</PadBtn>
         <PadBtn cls={'power' + (h.power >= 1 || h.charges > 0 ? ' ready' : '')} onDown={() => host.localPress('power')}>PODER</PadBtn>
         <PadBtn cls="brake" onDown={() => { li.brake = true; }} onUp={() => { li.brake = false; }}>FRENO</PadBtn>

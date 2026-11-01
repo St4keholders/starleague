@@ -1,6 +1,8 @@
 // Motor del anfitrión (pantalla del PC/TV)
-import { VILLAIN, CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, CUP_POINTS, TRACK_NAMES, MODES, DIFFICULTIES } from './constants.js';
+import { VILLAIN, CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, RUNNER_KARTS, CUP_POINTS, TRACK_NAMES, MODES, DIFFICULTIES } from './constants.js';
 import { Sim } from './sim.js';
+import { RunnerSim } from './runner/sim.js';
+import { RunnerWorld } from './runner/world.js';
 import { Renderer, drawCinemaFx } from './render.js';
 import { buildTrack, THEMES } from './trackgfx.js';
 import { Audio, MENU_SONG, STORY_SONG, VILLAIN_SONG, ZORG_SONG } from './audio.js';
@@ -15,9 +17,9 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const STEP = 1 / 60;
 
 const KB = {
-  // el carro acelera solo: "join" solo sirve para unirse en el lobby
-  kbA: { left: ['KeyA'], right: ['KeyD'], join: ['KeyW'], brake: ['KeyS'], drift: ['Space'], item: ['KeyQ'], power: ['KeyE'] },
-  kbB: { left: ['ArrowLeft'], right: ['ArrowRight'], join: ['ArrowUp'], brake: ['ArrowDown'], drift: ['ShiftRight', 'Numpad0'], item: ['Slash', 'Numpad1', 'Minus'], power: ['Period', 'Numpad2'] },
+  // el carro acelera solo: "join" solo sirve para unirse en el lobby; en carrera W / ↑ saltan
+  kbA: { left: ['KeyA'], right: ['KeyD'], join: ['KeyW'], jump: ['KeyW'], brake: ['KeyS'], drift: ['Space'], item: ['KeyQ'], power: ['KeyE'] },
+  kbB: { left: ['ArrowLeft'], right: ['ArrowRight'], join: ['ArrowUp'], jump: ['ArrowUp'], brake: ['ArrowDown'], drift: ['ShiftRight', 'Numpad0'], item: ['Slash', 'Numpad1', 'Minus'], power: ['Period', 'Numpad2'] },
 };
 
 function randCode() {
@@ -233,7 +235,21 @@ export class GameHost {
   localHud() {
     const k = this.localKart();
     if (!k) return null;
-    return { drift: k.driftLevel, power: k.power, charges: k.charges, item: k.rouletteT > 0 ? '?' : k.item, started: this.sim.started };
+    const runner = this.sim.mode === 'runner';
+    return {
+      mode: this.sim.mode,
+      drift: k.driftLevel,
+      power: k.power,
+      charges: k.charges,
+      item: k.rouletteT > 0 ? '?' : k.item,
+      started: this.sim.started,
+      hearts: runner ? k.hearts : 0,
+      alive: runner ? this.sim.karts.filter((o) => !o.eliminated).length : 0,
+      total: this.sim.karts.length,
+      dist: runner ? Math.round(k.distance || 0) : 0,
+      danger: runner ? Math.max(0, Math.round(k.y - (this.sim.chaserY || 0))) : 0,
+      biome: runner && this.sim.biome ? this.sim.biome.name : '',
+    };
   }
 
   lobbyMsg(slot) {
@@ -282,10 +298,11 @@ export class GameHost {
     if (!p) return;
     switch (msg.t) {
       case 'in': {
-        const prev = this.phoneIn[slot] || { ic: msg.ic, pc: msg.pc };
+        const prev = this.phoneIn[slot] || { ic: msg.ic, pc: msg.pc, jc: msg.jc || 0 };
         const pd = this.pend[slot] || (this.pend[slot] = {});
         if (msg.ic > prev.ic) pd.item = true;
         if (msg.pc > prev.pc) pd.power = true;
+        if ((msg.jc || 0) > (prev.jc || 0)) pd.jump = true;
         this.phoneIn[slot] = msg;
         p.lastSeen = performance.now();
         break;
@@ -382,6 +399,7 @@ export class GameHost {
         const pd = this.pend[slot] || (this.pend[slot] = {});
         if (map.item.includes(code)) pd.item = true;
         if (map.power.includes(code)) pd.power = true;
+        if (map.jump && map.jump.includes(code)) pd.jump = true;
       }
       return;
     }
@@ -425,6 +443,14 @@ export class GameHost {
   }
 
   startDemo() {
+    if (this.cfg.mode === 'supervivencia') {
+      const seed = 2026;
+      const w = new RunnerWorld(seed, 1);
+      this.demo = new RunnerSim({ world: w, seed, humans: [], difficulty: 1, demo: true });
+      this.demo.countdown = 0; this.demo.started = true; this.demo.demo = true;
+      this.renderer.setTrack(w);
+      return;
+    }
     const idx = this.cfg.mode === 'batalla' ? 'arena' : this.cfg.mode === 'rapida' ? this.cfg.track : this.cfg.mode === 'historia' ? (this.storyLevels(this.cfg.story)[this.cfg.level || 0] || this.storyLevels(this.cfg.story)[0]).track : 0;
     const t = this.getTrack(idx);
     this.demo = new Sim({ track: t, mode: idx === 'arena' ? 'battle' : 'race', humans: [], difficulty: 2, kartsTotal: idx === 'arena' ? 6 : 8, demo: true });
@@ -531,21 +557,43 @@ export class GameHost {
     this.advanceStory();
   }
 
-  startRace() {
+  startRace(customSeed = null) {
     const mode = this.cfg.mode;
+    const runner = mode === 'supervivencia';
     const battle = mode === 'batalla';
     const lvl = this.storyLevel();
-    const idx = lvl ? lvl.track : battle ? 'arena' : mode === 'copa' ? this.cup.races[this.cup.current] : this.cfg.track;
-    const track = this.getTrack(idx);
     this.players.forEach((p) => { if (p) p.late = false; });
     const humans = this.activePlayers().map((p) => ({ slot: p.slot, char: p.char }));
+    this.cinema = null;
+    this.storyResult = null;
+
+    if (runner && !lvl) {
+      const seed = customSeed !== null ? customSeed : ((Date.now() & 0x7fffffff) || 12345);
+      const world = new RunnerWorld(seed, this.cfg.diff);
+      this.sim = new RunnerSim({ world, seed, humans, difficulty: this.cfg.diff });
+      this.renderer.setTrack(world);
+      this.phase = 'race';
+      this.paused = false;
+      this.results = null;
+      this.pend = {};
+      const song = THEMES[world.theme] ? THEMES[world.theme].music : 0;
+      this.audio.playSong(song);
+      this.broadcast((i) => this.phaseMsg(i));
+      this.raceInit = raceInitMsg(this.sim, 'runner');
+      this.raceInit.song = song;
+      this.sfxOut = [];
+      this.broadcast(this.raceInit);
+      this.changed();
+      return;
+    }
+
+    const idx = lvl ? lvl.track : battle ? 'arena' : mode === 'copa' ? this.cup.races[this.cup.current] : this.cfg.track;
+    const track = this.getTrack(idx);
     const story = lvl ? {
       type: lvl.type, boss: this.resolveChar(lvl.boss), bossSkin: lvl.bossSkin, ally: lvl.ally || null, rivalSkin: lvl.rivalSkin || null,
       maxAhead: lvl.maxAhead, goal: lvl.goal || 0, hits: lvl.hits || 0, target: lvl.target || 3, obj: lvl.obj,
       time: lvl.type === 'time' ? (TIME_LIMITS[this.cfg.diff] || TIME_LIMITS[1]) : 0,
     } : null;
-    this.cinema = null;
-    this.storyResult = null;
     this.sim = new Sim({
       track, mode: battle && !lvl ? 'battle' : 'race', humans, difficulty: this.cfg.diff,
       kartsTotal: battle && !lvl ? BATTLE_KARTS : RACE_KARTS, botChars: this.cup ? this.cup.bots : null,
@@ -632,6 +680,7 @@ export class GameHost {
     }
     if (this.phase === 'storyend') { this.toLobby(); return; }
     if (this.phase === 'results') {
+      if (this.sim && this.sim.mode === 'runner') { this.startRace(); return; }
       if (this.cup && this.cup.current < this.cup.races.length - 1) { this.cup.current++; this.startRace(); return; }
       if (this.cup) { this.phase = 'podium'; this.audio.sfx('finish'); this.broadcast((i) => this.phaseMsg(i)); this.changed(); return; }
       this.toLobby();
@@ -689,6 +738,9 @@ export class GameHost {
         }
       }
       if (this.sim) {
+        if (this.sim.runner && this.sim.world && this.sim.world.ensure) {
+          this.sim.world.ensure(this.sim.chaserY - 300, this.sim.leaderY + 1700, 2);
+        }
         const lk = this.localKart();
         // sin pantalla principal: este dispositivo muestra solo a su jugador (los demás se ven en sus celulares)
         const views = lk ? [lk] : this.sim.karts.filter((k) => k.human).sort((a, b) => a.slot - b.slot);
@@ -726,6 +778,9 @@ export class GameHost {
       let n = 0;
       while (this.acc >= STEP && n < 6) { this.demo.step(STEP); this.demo.events.length = 0; this.acc -= STEP; n++; }
       if (n >= 6) this.acc = 0;
+      if (this.demo.runner && this.demo.world && this.demo.world.ensure) {
+        this.demo.world.ensure(this.demo.chaserY - 300, this.demo.leaderY + 1700, 2);
+      }
       // cámara: seguir al líder del demo
       const lead = this.demo.karts.reduce((a, b) => (a.place < b.place ? a : b));
       this.renderer.render(this.demo, [lead], { demo: true });
@@ -748,7 +803,7 @@ export class GameHost {
         k.autopilot = !p.connected || stale;
         base = m ? { steer: Math.max(-1, Math.min(1, Number(m.s) || 0)), acc: !!m.a, brake: !!m.b, drift: !!m.d } : { steer: 0, acc: false, brake: false, drift: false };
       } else base = this.kbInput(p.kind);
-      k.input = { ...base, acc: !base.brake, item: !!pd.item, power: !!pd.power };
+      k.input = { ...base, acc: !base.brake, item: !!pd.item, power: !!pd.power, jump: !!pd.jump };
       this.pend[k.slot] = {};
     }
   }
@@ -758,6 +813,12 @@ export class GameHost {
     for (const e of ev) {
       if (e.type === 'sfx') { this.audio.sfx(e.name); if (this.sfxOut.length < 12 && !this.sfxOut.includes(e.name)) this.sfxOut.push(e.name); }
       else if (e.type === 'buzz') this.send(e.slot, { t: 'buzz', ms: e.ms });
+      else if (e.type === 'biome' && THEMES[e.theme]) {
+        const song = THEMES[e.theme].music;
+        this.audio.playSong(song);
+        if (this.raceInit) this.raceInit.song = song;
+        this.viewers().forEach((p) => this.send(p.slot, { t: 'song', song }));
+      }
       else if (e.type === 'done') { this.sim.events.length = 0; this.endRace(); return; }
     }
     ev.length = 0;
@@ -769,6 +830,8 @@ export class GameHost {
 
   sendHud() {
     const sim = this.sim;
+    const runner = sim.mode === 'runner';
+    const alive = runner ? sim.karts.filter((o) => !o.eliminated).length : 0;
     for (const k of sim.karts) {
       if (!k.human) continue;
       const p = this.players[k.slot];
@@ -780,6 +843,11 @@ export class GameHost {
         count: sim.started ? 0 : Math.ceil(sim.countdown), drift: k.driftLevel, boost: k.boostT > 0, msg: k.messageT > 0 ? k.message : '', char: k.char,
         obj: sim.objectiveText || '',
         ft: k.finished ? Math.round(k.finishTime * 100) / 100 : 0, fl: Math.round(k.flashT * 100) / 100, v: Math.round(k.v),
+        hearts: runner ? k.hearts : 0,
+        alive,
+        dist: runner ? Math.round(k.distance || 0) : 0,
+        danger: runner ? Math.max(0, Math.round(k.y - (sim.chaserY || 0))) : 0,
+        biome: runner && sim.biome ? sim.biome.name : '',
       });
     }
   }

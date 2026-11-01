@@ -5,8 +5,8 @@ Juego de carreras retro (pixel art, cámara detrás del carro estilo 16 bits) pa
 - Hasta **4 jugadores** en pantalla dividida + bots hasta completar 8 corredores.
 - **8 personajes**, cada uno con su poder.
 - **10 pistas**: Pradera Molinos, Playa Coral, Cumbre Nevada, Volcán Fortaleza, Senda Estelar, Fortaleza Eclipse, Anillos de Saturnia, Jungla Gloop, Ciudad Neón y Coliseo de Zorg.
-- **Modos**: Historia 1 (10 niveles) e Historia 2 (7 niveles) con cinemáticas, Copa (5 pistas con puntos y podio), Carrera rápida y Batalla de globos.
-- **Manejo automático**: el carro acelera solo; tú giras, derrapas, usas objetos y frenas.
+- **Modos**: Historia 1 (10 niveles) e Historia 2 (7 niveles) con cinemáticas, Copa (5 pistas con puntos y podio), Carrera rápida, Batalla de globos y **Supervivencia Estelar** (campo infinito por biomas con perseguidor).
+- **Manejo automático**: el carro acelera solo; tú giras, derrapas, saltas (en Supervivencia), usas objetos y frenas.
 - **Derrape con mini turbo** y objetos en cajas.
 - Todo el arte y la música se generan con código: no descarga imágenes ni audio, consume muy pocos datos.
 
@@ -71,8 +71,10 @@ El carro **acelera solo** y la caja es automática.
 | FRENO / reversa | posición, vuelta, objeto y poder | PODER (brilla cuando está listo) |
 
 **Ver el juego en el celular**: el juego ocupa toda la pantalla y los botones van encima:
-- **Izquierda:** DERRAPE, OBJETO, PODER y FRENO.
+- **Izquierda:** DERRAPE, OBJETO, PODER y FRENO (en **Supervivencia Estelar** aparece **SALTO** grande arriba).
 - **Derecha:** ◀ ▶ grandes. Si usas el sensor, las flechas desaparecen y ese lado queda para un DERRAPE grande.
+
+En **Solo mando** durante **Supervivencia Estelar**, la columna izquierda lleva **SALTO (grande)** y FRENO; el centro lleva ◀ ▶ (o volante), tus corazones y cuántos siguen vivos; y la derecha lleva OBJETO, PODER y DERRAPE.
 
 **Derrape con mini turbo:** mantén DERRAPE mientras giras con las flechas. El carro da un saltito, desliza y las chispas cargan solas: primero **azules** y, a los 1,5 s, **naranjas**. Al soltar sales disparado; el turbo es más largo con las naranjas.
 
@@ -81,9 +83,47 @@ El carro **acelera solo** y la caja es automática.
 
 ### Teclado de respaldo (en el PC)
 
-- **J con WASD** (W para unirse): A/D gira, S frena, Espacio derrapa, Q objeto, E poder. En el lobby, A/D cambia personaje.
-- **J con flechas** (↑ para unirse): ←/→ gira, ↓ frena, Shift derecho derrapa, `-` objeto, `.` poder.
+- **J con WASD** (W para unirse en el lobby y saltar en carrera): A/D gira, S frena, Espacio derrapa, Q objeto, E poder. En el lobby, A/D cambia personaje.
+- **J con flechas** (↑ para unirse en el lobby y saltar en carrera): ←/→ gira, ↓ frena, Shift derecho derrapa, `-` objeto, `.` poder.
 - `M` silencia el sonido. `Enter` empieza la partida o continúa.
+
+## Supervivencia Estelar
+
+Un modo de carrera infinita hacia adelante para **1 a 4 jugadores + bots hasta completar 6 corredores**, donde el campo cambia de mundo cada 900 m y un peligro gigante viene persiguiendo al grupo desde atrás.
+
+### Reglas
+
+- **3 vidas (corazones):** todos arrancan con `♥♥♥`. Chocar contra un obstáculo sólido o caer al agua sin hielo, lava o vacío quita **1 corazón** (y da 1,8 s de invulnerabilidad). Al llegar a `0` corazones quedas eliminado.
+- **El perseguidor:** detrás del grupo avanza una amenaza gigante que acelera con el tiempo y nunca se queda a más de cierta distancia del líder. Si te alcanza, quedas eliminado de inmediato aunque tengas vidas.
+- **Último en pie:** gana el último corredor vivo (o quien llegue más lejos si los jugadores humanos caen). Las partidas duran entre **2 y 4 minutos**.
+- **Vista del eliminado:** en pantalla dividida, si un jugador cae eliminado mientras otro sigue vivo, su cámara pasa a seguir al líder vivo.
+
+### Terreno, saltos y recogibles
+
+- **Salto (`W`, `↑` o botón SALTO):** permite saltar cercas bajas, troncos, barreras y huecos cortos.
+- **Rampas, techos y puentes:** las rampas naranjas lanzan el kart por el aire para subir a los **techos de los graneros** o cruzar lagos y ríos por **puentes de madera**.
+- **Pasto alto con surcos:** las zonas de trigo o pasto alto frenan ligeramente (92 %) y dejan un **surco de tierra persistente** por donde pasan los karts.
+- **Agua, hielo e islas:** los lagos congelados (con grietas blancas) se pueden cruzar patinando; el agua abierta quita 1 corazón y te reaparece en tierra firme a la misma altura.
+- **Recogibles:**
+  - **Corazón (`♥`):** recupera 1 vida (hasta 3; si ya tienes 3, da un mini-turbo).
+  - **Escudo burbuja:** protege durante 8 s o absorbe 1 choque contra obstáculo.
+  - **Franjas de turbo en el piso:** dan impulso inmediato.
+  - **Cajas de objetos:** entregan los objetos clásicos (chile, aceite, chicle, burbuja, imán) y cargan la barra de poder. Los objetos y poderes de otros corredores te frenan o hacen trompo, pero **no te quitan corazones** directamente.
+
+### Los 8 biomas (en orden, cada 900 m)
+
+| # | Bioma | Peligros y terreno | Perseguidor |
+| --- | --- | --- | --- |
+| 1 | **Granja Dorada** | Graneros con rampa y techo, silos, tractores que cruzan, pacas de heno, cercas, calabazas, ovejas, trigo alto y lagos | La estampida |
+| 2 | **Playa Coral** | Palmas, rocas, cangrejos gigantes, agua con islas y puentes | El maremoto |
+| 3 | **Cumbre Nevada** | Pinos, muñecos de nieve, cristales, lagos congelados y placas de hielo | La avalancha |
+| 4 | **Volcán Fortaleza** | Pilares de basalto, ríos de lava con puentes y géiseres de fuego | La colada de lava |
+| 5 | **Jungla Gloop** | Árboles gigantes, hongos, charcos de baba verde y pasto alto | La ola de baba |
+| 6 | **Ciudad Neón** | Torres, barreras láser saltables, autos flotantes que cruzan y muchas franjas de turbo | La tormenta eléctrica |
+| 7 | **Senda Estelar** | Cristales estelares, asteroides y huecos al vacío con puentes de luz | El agujero negro |
+| 8 | **Coliseo de Zorg** | Obeliscos alienígenas, baba, lava y meteoritos que caen con sombra de aviso | La nave de Zorg |
+
+Pasado el Coliseo de Zorg, los biomas vuelven a ciclar a mayor velocidad.
 
 ## Modo historia
 
@@ -160,6 +200,8 @@ Objetos de las cajas: turbo de chile, mancha de aceite, bola de chicle, escudo b
 app/            páginas de Next.js (/ = pantalla del TV, /mando = celular)
 components/     HostApp (lobby, cinemáticas, resultados, podio) y ControllerApp (mando)
 game/           motor: render pseudo-3D, simulación, pistas, sprites, sonido, red
+game/runner/    modo Supervivencia Estelar: config, layout por semilla, mundo circular y RunnerSim
 game/story.js   niveles, objetivos y guiones de las cinemáticas del modo historia
 game/cinema.js  cámara y diálogos de las cinemáticas
+scripts/        runner-smoke.mjs (pruebas deterministas y simulación sin navegador)
 ```
