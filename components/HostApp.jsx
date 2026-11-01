@@ -356,7 +356,7 @@ function Results({ st, host, portraits }) {
                 {runner && (
                   <td className="rs">
                     {r.reason === 'ganador'
-                      ? '¡Último en pie!'
+                      ? (r.place === 1 ? '¡Último en pie!' : 'Seguía en pie')
                       : r.reason === 'vidas'
                         ? 'Sin vidas'
                         : `Lo atrapó ${r.chaserName || 'el perseguidor'}`}
@@ -505,14 +505,8 @@ function HostPad({ host, st, steerMode, tilt, portrait, items }) {
   return (
     <div className={'pad view host-pad' + (tiltOn ? ' tilt' : '')} style={{ '--c': SLOT_COLORS[st.local] }}>
       <div className="pad-col left">
-        {runner ? (
-          <>
-            <div className="pad-col-big">{jumpBtn}</div>
-            {!tiltOn && driftBtn}
-          </>
-        ) : (
-          !tiltOn && <div className="pad-col-big">{driftBtn}</div>
-        )}
+        {/* en Supervivencia no hay derrape (camino recto): el botón grande es SALTO */}
+        {!tiltOn && <div className="pad-col-big">{runner ? jumpBtn : driftBtn}</div>}
         <PadBtn cls="item" onDown={() => host.localPress('item')}>OBJETO</PadBtn>
         <PadBtn cls={'power' + (h.power >= 1 || h.charges > 0 ? ' ready' : '')} onDown={() => host.localPress('power')}>PODER</PadBtn>
         <PadBtn cls="brake" onDown={() => { li.brake = true; }} onUp={() => { li.brake = false; }}>FRENO</PadBtn>
@@ -524,7 +518,7 @@ function HostPad({ host, st, steerMode, tilt, portrait, items }) {
         </div>
       </div>
       <div className="pad-col right">
-        {tiltOn ? driftBtn : (
+        {tiltOn ? (runner ? jumpBtn : driftBtn) : (
           <div className="steer-btns">
             <PadBtn cls="steer" onDown={steer('l', true)} onUp={steer('l', false)}>◀</PadBtn>
             <PadBtn cls="steer" onDown={steer('r', true)} onUp={steer('r', false)}>▶</PadBtn>

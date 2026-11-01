@@ -332,7 +332,7 @@ export class Renderer {
         if (p && p.f >= CAM_DIST * 0.75) {
           push(p, () => {
             this.shadow(p, c, st.x, st.y, d.r || 16);
-            this.billboard(spec.c, p, spec.w);
+            this.billboard(spec.c, p, d.dw || spec.w);
           });
         }
         continue;
@@ -346,7 +346,7 @@ export class Renderer {
       if (!spec) continue;
       // Colocar la fachada del granero en el borde frontal (y0) para coincidir con el techo
       const py = d.kind === 'barn' && d.h ? d.y - d.h * 0.45 : d.y;
-      const p = this.proj(c, d.x, py, spec.float || 0);
+      const p = this.proj(c, d.x, py, d.fz ?? (spec.float || 0));
       if (p && p.f < CAM_DIST * 0.75) continue;
       if (d.kind === 'gate' && d.biomeName) {
         push(p, () => {
@@ -358,7 +358,13 @@ export class Renderer {
         });
         continue;
       }
-      push(p, () => this.billboard(spec.c, p, spec.w, d.kind === 'starcrystal' || d.kind === 'asteroid' ? Math.sin(time * 2 + d.x) * 4 * p.s : 0));
+      const dw = d.dw || spec.w;
+      if (t.runner && d.solid) {
+        // obstáculo de verdad: sombra oscura en el piso para que se distinga de los adornos
+        push(p, () => { this.shadow(p, c, d.x, py, (d.w ? d.w * 0.5 : d.r || 14) + 4); this.billboard(spec.c, p, dw); });
+        continue;
+      }
+      push(p, () => this.billboard(spec.c, p, dw, d.kind === 'starcrystal' || d.kind === 'asteroid' ? Math.sin(time * 2 + d.x) * 4 * p.s : 0));
     }
     // banda del perseguidor en Supervivencia Estelar (sección 4.3)
     if (this.t.runner && sim.chaserY !== undefined) {

@@ -91,9 +91,17 @@ En **Solo mando** durante **Supervivencia Estelar**, la columna izquierda lleva 
 
 Un modo de carrera infinita hacia adelante para **1 a 4 jugadores + bots hasta completar 6 corredores**, donde el campo cambia de mundo cada 900 m y un peligro gigante viene persiguiendo al grupo desde atrás.
 
+### Cómo se maneja
+
+- **El camino es recto, sin curvas.** La cámara siempre mira hacia adelante y el kart acelera solo: tú solo **esquivas**.
+- **◀ ▶ (o A/D, ←/→, o inclinar el celular)** mueven el kart hacia los lados. **FRENO** te deja atrás un poco (¡cuidado con el perseguidor!).
+- **SALTO** pasa por encima de lo bajito (pacas, calabazas, cercas, rocas). En este modo no hay derrape: **Espacio** o **Shift derecho** también saltan.
+- Los obstáculos vienen en **filas** con al menos un hueco libre. Los postes rojos y blancos marcan las paredes del campo.
+- Al chocar pierdes un corazón, frenas y parpadeas 2 s: durante ese tiempo atraviesas los obstáculos, así que no te quedas pegado.
+
 ### Reglas
 
-- **3 vidas (corazones):** todos arrancan con `♥♥♥`. Chocar contra un obstáculo sólido o caer al agua sin hielo, lava o vacío quita **1 corazón** (y da 1,8 s de invulnerabilidad). Al llegar a `0` corazones quedas eliminado.
+- **3 vidas (corazones):** todos arrancan con `♥♥♥`. Chocar contra un obstáculo sólido o caer al agua sin hielo, lava o vacío quita **1 corazón** (y da 2 s de invulnerabilidad). Al llegar a `0` corazones quedas eliminado.
 - **El perseguidor:** detrás del grupo avanza una amenaza gigante que acelera con el tiempo y nunca se queda a más de cierta distancia del líder. Si te alcanza, quedas eliminado de inmediato aunque tengas vidas.
 - **Último en pie:** gana el último corredor vivo (o quien llegue más lejos si los jugadores humanos caen). Las partidas duran entre **2 y 4 minutos**.
 - **Vista del eliminado:** en pantalla dividida, si un jugador cae eliminado mientras otro sigue vivo, su cámara pasa a seguir al líder vivo.

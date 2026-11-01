@@ -46,9 +46,9 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   const sim = new RunnerSim({ seed: 123, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
   sim.started = true;
   const k = sim.karts[0];
-  const ch3 = sim.world.getChunk(3);
-  const obs = ch3.obstacles.find((o) => o.solid);
-  assert(obs, 'Debe existir obstáculo sólido en el trozo 3');
+  let obs = null;
+  for (let ci = 3; ci < 40 && !obs; ci++) obs = sim.world.getChunk(ci).obstacles.find((o) => o.solid && !o.moving);
+  assert(obs, 'Debe existir un obstáculo sólido en los primeros trozos');
   // Con escudo activo: absorbe el golpe sin quitar corazón
   k.shieldT = 5;
   k.x = obs.x; k.y = obs.y; k.z = 0; k.v = 200;
@@ -110,7 +110,7 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
 
   // a) Saltar una cerca
   let fence = null;
-  for (let ci = 3; ci < 60; ci++) {
+  for (let ci = 3; ci < 300; ci++) {
     fence = sim.world.getChunk(ci).obstacles.find((o) => o.kind === 'fence');
     if (fence) break;
   }
@@ -127,7 +127,7 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
 
   // b) Con rampa subir a un techo de granero, avanzar encima y caer al final
   let barnChunk = null, barnPl = null, barnRamp = null;
-  for (let ci = 3; ci < 120; ci++) {
+  for (let ci = 3; ci < 300; ci++) {
     const ch = sim.world.getChunk(ci);
     if (ch.platforms && ch.platforms.length > 0) {
       barnChunk = ch;
@@ -225,31 +225,24 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   const sim = new RunnerSim({ seed: 654, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
   sim.started = true;
   const k = sim.karts[0];
-  let grassChunk = null, grassZone = null, tuft = null;
-  for (let ci = 3; ci < 50; ci++) {
-    const ch = sim.world.getChunk(ci);
-    const gz = ch.zones.find((z) => z.type === 'grass');
-    const gt = ch.decor.find((d) => d.kind === 'grasstuft' && !d.cut);
-    if (gz && gt) {
-      grassChunk = ch;
-      grassZone = gz;
-      tuft = gt;
-      break;
-    }
-  }
-  assert(grassChunk && grassZone && tuft, 'Deben generarse zonas grass y mechones grasstuft');
-  k.x = tuft.x; k.y = tuft.y; k.z = 0; k._prevZ = 0; k.boostT = 0; k.v = k.maxV;
+  let grassZone = null;
+  for (let ci = 3; ci < 80 && !grassZone; ci++) grassZone = sim.world.getChunk(ci).zones.find((z) => z.type === 'grass');
+  assert(grassZone, 'Deben generarse zonas de pasto alto (grass)');
+  k.x = (grassZone.x0 + grassZone.x1) / 2; k.y = (grassZone.y0 + grassZone.y1) / 2; k.z = 0; k._prevZ = 0; k.boostT = 0; k.v = k.maxV;
+  k.input = { steer: 0, acc: true, brake: false, drift: false, item: false, power: false, jump: false };
   sim.updateKart(k, 1 / 60);
   assert(k.surface === 'grass', 'El kart dentro de una zona grass debe tener surface="grass"');
-  assert(tuft.cut === true && sim.world.grassCuts > 0, 'cutGrass debe cortar el mechón cercano y dejar surco persistente');
+  assert(sim.world.grassCuts > 0, 'cutGrass debe dejar surco');
   assert(k.v <= k.maxV * 0.92 + 0.01, 'El pasto alto debe frenar la velocidad máxima a 0.92');
 
   // Prueba de obstáculos móviles (tractor_side, sheep): determinismo en dos instancias al mismo raceTime
-  const chA = generateChunk(12345, 4, 1);
-  const chB = generateChunk(12345, 4, 1);
-  const movA = chA.obstacles.find((o) => o.moving);
-  const movB = chB.obstacles.find((o) => o.moving);
-  assert(movA && movB, 'El trozo 4 debe tener obstáculo móvil en la granja');
+  let movCi = 3;
+  while (movCi < 200 && !generateChunk(12345, movCi, 1).obstacles.some((o) => o.moving && o.moveType === 'cross')) movCi++;
+  const chA = generateChunk(12345, movCi, 1);
+  const chB = generateChunk(12345, movCi, 1);
+  const movA = chA.obstacles.find((o) => o.moving && o.moveType === 'cross');
+  const movB = chB.obstacles.find((o) => o.moving && o.moveType === 'cross');
+  assert(movA && movB, 'Debe existir un obstáculo móvil que cruza');
   const st0 = obstacleStateAt(movA, 0);
   const st1A = obstacleStateAt(movA, 2.35);
   const st1B = obstacleStateAt(movB, 2.35);

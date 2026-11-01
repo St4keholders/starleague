@@ -10,11 +10,23 @@ export const WORLD_W = 2048 * TEX_SCALE; // 3072
 export const CHUNK_TEX_ROWS = 128;
 export const CHUNK_LEN = CHUNK_TEX_ROWS * TEX_SCALE; // 192 unidades de mundo
 export const SAFE_START_CHUNKS = 3;
-export const MIN_CORRIDOR_W = 90;
+export const MIN_CORRIDOR_W = 44;
+
+// Campo recto (sin curvas): centro fijo y ancho fijo, dividido en franjas invisibles para armar las filas
+export const FIELD_CX = 1536;
+export const FIELD_HW = 170; // medio ancho jugable (340 u de ancho: las paredes se ven siempre)
+export const SLOTS = 5;
+export const SLOT_W = (FIELD_HW * 2) / SLOTS; // 68 u
+export const WALL_W = 18; // ancho de la pared (unidades de mundo)
+
+// Conducción guiada: el kart siempre va hacia adelante; girar = inclinarse hacia un lado
+export const STEER_TILT = 0.45; // cuánto se ve girado el kart al moverse de lado (solo visual, rad)
+export const LAT_SPEED = 150; // velocidad lateral base (u/s); sube un poco con la velocidad
+export const STEER_RESPONSE = 10; // qué tan rápido responde la inclinación
 
 // Velocidad del kart a lo largo de la partida
 export const SPEED_START = 0.85;
-export const SPEED_END = 1.35;
+export const SPEED_END = 1.25;
 export const SPEED_RAMP_TIME = 180;
 
 // Perseguidor
@@ -39,7 +51,7 @@ export const RAMP_V_FACTOR = 0.25;
 export const RAMP_BOOST = 0.45;
 export const SHIELD_DURATION = 8.0;
 export const INVULN_DURATION = 2.0;
-export const CRASH_SPIN_DURATION = 0.55;
+export const CRASH_SPIN_DURATION = 0.4;
 
 // Frecuencia de recogibles (en unidades de avance)
 export const HEART_EVERY = 2500;

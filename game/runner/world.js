@@ -9,8 +9,12 @@ import {
   CHUNK_TEX_ROWS,
   CHUNK_LEN,
   BIOMES,
+  BIOME_TRANSITION,
+  FIELD_CX,
+  FIELD_HW,
+  WALL_W,
 } from './config.js';
-import { centerX, halfW, biomeAt, generateChunk } from './layout.js';
+import { biomeAt, generateChunk, themeAt } from './layout.js';
 
 // Matriz Bayer 4x4 para el tramado (dithering) en la transición entre biomas
 const BAYER4 = new Uint8Array([
@@ -43,9 +47,9 @@ const RAMP_EDGE = packHex('#c8341a');
 const BRIDGE_WOOD_A = packHex('#8a562a');
 const BRIDGE_WOOD_B = packHex('#6e421e');
 const BRIDGE_RAIL = packHex('#4a2a10');
-const GRASS_FARM_DARK = packHex('#b85814');
-const GRASS_FARM_MID = packHex('#df7a20');
-const GRASS_FARM_TIP = packHex('#ffa83a');
+const GRASS_FARM_DARK = packHex('#c8961e');
+const GRASS_FARM_MID = packHex('#efc23e');
+const GRASS_FARM_TIP = packHex('#ffe484');
 const GRASS_JUNG_DARK = packHex('#145a28');
 const GRASS_JUNG_MID = packHex('#268a44');
 const GRASS_JUNG_TIP = packHex('#72e042');
@@ -62,6 +66,16 @@ const DIRT_A = packHex('#8a5a2a');
 const DIRT_B = packHex('#764a20');
 
 const themeAssetsCache = {};
+const FIELD_FROM_ROAD = new Set(['volcan', 'estelar', 'anillos', 'neon', 'coliseo']);
+const CURB_T = 4; // grosor del borde de colores (texels)
+const FURROW_EVERY = 12; // surcos/líneas a lo largo del campo (dan sensación de avance)
+
+function mulCol(c, m) {
+  const r = Math.min(255, ((c & 255) * m) | 0);
+  const g = Math.min(255, (((c >> 8) & 255) * m) | 0);
+  const b = Math.min(255, (((c >> 16) & 255) * m) | 0);
+  return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+}
 
 function getThemeAssets(themeName) {
   if (themeAssetsCache[themeName]) return themeAssetsCache[themeName];
@@ -82,8 +96,17 @@ function getThemeAssets(themeName) {
   const fog = hexToRgb(th.fog);
   const fogCol = ((255 << 24) | (fog[2] << 16) | (fog[1] << 8) | fog[0]) >>> 0;
 
+  // Piso del campo: tierra natural en los mundos de naturaleza, la «pista» en los mundos de ciudad/espacio
+  const fieldBase = FIELD_FROM_ROAD.has(themeName) ? th.road : (th.off || th.road);
+  const fieldNoise = FIELD_FROM_ROAD.has(themeName) ? (th.roadNoise || [th.road]) : (th.offNoise || th.roadNoise || [fieldBase]);
+  // poco ruido: el piso debe verse limpio para que los obstáculos resalten
+  const fieldTile = noiseTile(fieldBase, fieldNoise.filter((c) => c !== '#ffffff'), rng, 64, 0.12, false);
   const assets = {
     theme: themeName,
+    fieldPat: toU32(fieldTile),
+    furrowMul: FIELD_FROM_ROAD.has(themeName) ? 1.18 : 0.86,
+    curbA: packHex(th.curbA || '#ffffff'),
+    curbB: packHex(th.curbB || '#e8342c'),
     th,
     sky,
     skyTop,
@@ -178,74 +201,46 @@ export class RunnerWorld {
     let slotThemeUniform = true;
     let lastEffTheme = '';
 
+    const cxT = Math.round(FIELD_CX / TEX_SCALE);
+    const hwT = Math.round(FIELD_HW / TEX_SCALE);
+    const wallT = Math.round(WALL_W / TEX_SCALE);
+    const leftIn = cxT - hwT;
+    const rightIn = cxT + hwT - 1;
+    const leftWall = leftIn - wallT;
+    const rightWall = rightIn + wallT;
     for (let r = 0; r < CHUNK_TEX_ROWS; r++) {
       const v = (row0 + r) & 2047;
-      const wy = (chunkIndex * CHUNK_TEX_ROWS + r) * TEX_SCALE;
+      const vAbs = chunkIndex * CHUNK_TEX_ROWS + r;
+      const wy = vAbs * TEX_SCALE;
       const b = biomeAt(wy);
-      const effTheme = b.altTheme && b.localY < 4500 ? b.altTheme : b.theme;
+      const effTheme = themeAt(b);
       if (r === 0) lastEffTheme = effTheme;
       else if (effTheme !== lastEffTheme || b.inTransition) slotThemeUniform = false;
       const curA = getThemeAssets(effTheme);
-      const prevA = b.inTransition ? getThemeAssets(b.prevTheme) : curA;
+      const prevA = b.inTransition ? getThemeAssets(themeAt(biomeAt(wy - BIOME_TRANSITION - 1))) : curA;
       const threshold = (b.t01 * 16) | 0;
-
-      const cx = (centerX(this.seed, wy) / TEX_SCALE) | 0;
-      const hw = (halfW(this.seed, wy) / TEX_SCALE) | 0;
-      const leftIn = Math.max(24, cx - hw);
-      const rightIn = Math.min(2024, cx + hw);
-      const leftWall = Math.max(0, leftIn - 18);
-      const rightWall = Math.min(2047, rightIn + 18);
-      // Sendero central suave
-      const pathShift = Math.round(Math.sin(wy / 360 + this.seed * 0.1) * (hw * 0.35));
-      const pathL = cx + pathShift - 26;
-      const pathR = cx + pathShift + 26;
-
       const rowOff = v << 11;
       const patRow = (v & 63) << 6;
-
-      if (!b.inTransition) {
-        const outPat = curA.outer;
-        const wallPat = curA.wallPat;
-        const offPat = curA.offPat;
-        const roadPat = curA.roadPat;
-        const borderCol = curA.borderCol;
-        const bL = Math.max(leftWall, leftIn - 2);
-        const bR = Math.min(rightWall, rightIn + 2);
-        const pL = Math.max(leftIn, pathL);
-        const pR = Math.min(rightIn, pathR);
-        // Si este slot ya tenía el mismo tema, los márgenes lejanos (< 440 y > 1608) ya tienen outPat exacto
-        const sameOuter = prevSlotTheme === effTheme;
-        const uStart = sameOuter ? Math.min(leftWall, 440) : 0;
-        const uEnd = sameOuter ? Math.max(rightWall + 1, 1608) : MAP_SIZE;
-
-        let u = uStart;
-        for (; u < leftWall; u++) tex[rowOff | u] = outPat[patRow | (u & 63)];
-        for (; u < bL; u++) tex[rowOff | u] = wallPat[patRow | (u & 63)];
-        for (; u < leftIn; u++) tex[rowOff | u] = borderCol;
-        for (; u < pL; u++) tex[rowOff | u] = offPat[patRow | (u & 63)];
-        for (; u <= pR; u++) tex[rowOff | u] = roadPat[patRow | (u & 63)];
-        for (; u <= rightIn; u++) tex[rowOff | u] = offPat[patRow | (u & 63)];
-        for (; u <= bR; u++) tex[rowOff | u] = borderCol;
-        for (; u <= rightWall; u++) tex[rowOff | u] = wallPat[patRow | (u & 63)];
-        for (; u < uEnd; u++) tex[rowOff | u] = outPat[patRow | (u & 63)];
-      } else {
-        slotThemeUniform = false;
-        const bayerRow = (v & 3) << 2;
-        for (let u = 0; u < MAP_SIZE; u++) {
-          const A = BAYER4[bayerRow | (u & 3)] < threshold ? curA : prevA;
-          const patIdx = patRow | (u & 63);
-          let col;
-          if (u < leftWall || u > rightWall) {
-            col = A.outer[patIdx];
-          } else if (u < leftIn || u > rightIn) {
-            col = (u >= leftIn - 2 && u <= rightIn + 2) ? A.borderCol : A.wallPat[patIdx];
-          } else if (u >= pathL && u <= pathR) {
-            col = A.roadPat[patIdx];
-          } else {
-            col = A.offPat[patIdx];
-          }
-          tex[rowOff | u] = col;
+      const bayerRow = (v & 3) << 2;
+      const curbOn = ((vAbs >> 3) & 1) === 0;
+      const sameOuter = !b.inTransition && prevSlotTheme === effTheme;
+      const uStart = sameOuter ? leftWall : 0;
+      const uEnd = sameOuter ? rightWall + 1 : MAP_SIZE;
+      for (let u = uStart; u < uEnd; u++) {
+        const A = b.inTransition && BAYER4[bayerRow | (u & 3)] >= threshold ? prevA : curA;
+        const pi = patRow | (u & 63);
+        let col;
+        if (u < leftWall || u > rightWall) col = A.outer[pi];
+        else if (u < leftIn - CURB_T || u > rightIn + CURB_T) {
+          // pared: más oscura hacia afuera y con una línea de sombra junto al borde
+          col = (u === leftWall || u === rightWall) ? A.borderCol : A.wallPat[pi];
+        } else if (u < leftIn || u > rightIn) col = curbOn ? A.curbA : A.curbB;
+        else {
+          col = A.fieldPat[pi];
+          if ((u - leftIn) % FURROW_EVERY === 0) col = mulCol(col, A.furrowMul);
+          else if (u === leftIn || u === rightIn) col = mulCol(col, 0.7);
         }
+        tex[rowOff | u] = col;
       }
     }
     this.paintedTheme[slot] = slotThemeUniform ? lastEffTheme : '';
@@ -456,9 +451,7 @@ export class RunnerWorld {
   }
 
   applyBiomeFor(renderer, y) {
-    const b = biomeAt(y);
-    const effTheme = b.altTheme && b.localY < 4500 ? b.altTheme : b.theme;
-    const A = getThemeAssets(effTheme);
+    const A = getThemeAssets(themeAt(biomeAt(y)));
     this.theme = A.theme;
     this.th = A.th;
     this.sky = A.sky;
