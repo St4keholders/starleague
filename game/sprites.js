@@ -763,6 +763,43 @@ function makeDecor() {
     drawTuft(x2, '#1e7a36', '#3ddc68', '#b8ff4a');
     add('grasstuft_jungle', c2, 14);
   }
+  { // oveja blanca esponjosa (sheep y sheep2, 2 cuadros de caminar)
+    for (let f = 0; f < 2; f++) {
+      const c = mkCanvas(24, 18), x = c.getContext('2d');
+      // patas negras alternadas
+      rect(x, 6 + f * 2, 13, 2, 5, '#222228');
+      rect(x, 10 - f, 13, 2, 4, '#222228');
+      rect(x, 14 + f, 13, 2, 5, '#222228');
+      rect(x, 17 - f * 2, 13, 2, 4, '#222228');
+      // lana blanca esponjosa
+      ell(x, 12, 9, 8, 5, '#e8ecf2');
+      disc(x, 8, 8, 4, '#ffffff');
+      disc(x, 13, 7, 5, '#ffffff');
+      disc(x, 16, 9, 4, '#f4f6fa');
+      // cabeza negra con oreja y ojo blanco
+      disc(x, 5, 8, 3, '#26242c');
+      rect(x, 3, 6, 2, 2, '#1a1820');
+      rect(x, 4, 7, 1, 1, '#ffffff');
+      add(f === 0 ? 'sheep' : 'sheep2', c, 26);
+    }
+  }
+  { // auto flotante neón (hovercar, Ciudad Neón)
+    const c = mkCanvas(36, 18), x = c.getContext('2d');
+    // propulsores inferiores cian brillante
+    rect(x, 5, 13, 8, 3, '#2ef0ff');
+    rect(x, 23, 13, 8, 3, '#2ef0ff');
+    // chasis aerodinámico morado/azul oscuro con franja magenta neón
+    rect(x, 2, 8, 32, 6, '#261a4a');
+    rect(x, 4, 7, 28, 3, '#3c2a70');
+    rect(x, 2, 10, 32, 2, '#ff2ea6');
+    // cabina de cristal cian
+    rect(x, 10, 3, 16, 5, '#182438');
+    rect(x, 12, 4, 12, 3, '#7ff6ff');
+    // faros delanteros y traseros
+    rect(x, 1, 8, 2, 3, '#fff680');
+    rect(x, 33, 8, 2, 3, '#ff4d5e');
+    add('hovercar', c, 50, 12);
+  }
   return D;
 }
 

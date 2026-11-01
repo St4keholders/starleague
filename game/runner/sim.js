@@ -23,7 +23,7 @@ import {
   maxGapAt,
   chaserSpeed,
 } from './config.js';
-import { centerX, centerSlope, halfW, biomeAt, generateChunk, isHazardAt } from './layout.js';
+import { centerX, centerSlope, halfW, biomeAt, generateChunk, isHazardAt, obstacleStateAt } from './layout.js';
 
 const KART_R = 9;
 
@@ -274,9 +274,11 @@ export class RunnerSim extends Sim {
       let blocked = false;
       for (const o of ch.obstacles) {
         if (!o.solid) continue;
+        const st = obstacleStateAt(o, this.raceTime || 0);
+        if (!st.active) continue;
         const hx = (o.w ? o.w * 0.5 : o.r || 16) + KART_R + 6;
         const hy = (o.h ? o.h * 0.5 : o.r || 16) + KART_R + 6;
-        if (Math.abs(sx - o.x) < hx && Math.abs(y - o.y) < hy) {
+        if (Math.abs(sx - st.x) < hx && Math.abs(y - st.y) < hy) {
           blocked = true;
           break;
         }
@@ -478,21 +480,23 @@ export class RunnerSim extends Sim {
         const ch = this.world.getChunk(cIdx);
         for (const o of ch.obstacles) {
           if (!o.solid) continue;
+          const st = obstacleStateAt(o, this.raceTime || 0);
+          if (!st.active) continue;
           const oh = o.height || 24;
           // Si está en una plataforma por encima del obstáculo o saltando sobre él, no choca
           if (k.z >= oh - 6) continue;
           if (o.w && o.h) {
             const hx = o.w * 0.5 + KART_R;
             const hy = o.h * 0.5 + KART_R;
-            const dx = k.x - o.x;
-            const dy = k.y - o.y;
+            const dx = k.x - st.x;
+            const dy = k.y - st.y;
             if (Math.abs(dx) < hx && Math.abs(dy) < hy) {
               this.damageKart(k, 'vidas', true);
               break;
             }
           } else {
-            const dx = k.x - o.x;
-            const dy = k.y - o.y;
+            const dx = k.x - st.x;
+            const dy = k.y - st.y;
             const d = Math.hypot(dx, dy);
             const m = (o.r || 16) + KART_R;
             if (d < m) {
@@ -594,13 +598,16 @@ export class RunnerSim extends Sim {
             }
             for (const o of ch.obstacles) {
               if (!o.solid) continue;
+              const futTime = (this.raceTime || 0) + s / Math.max(120, k.v);
+              const st = obstacleStateAt(o, futTime);
+              if (o.moveType === 'fire' && !st.warning && !st.active) continue;
               let d;
               if (o.w && o.h) {
-                const dx = Math.max(0, Math.abs(sx - o.x) - o.w * 0.5);
-                const dy = Math.max(0, Math.abs(sy - o.y) - o.h * 0.5);
+                const dx = Math.max(0, Math.abs(sx - st.x) - o.w * 0.5);
+                const dy = Math.max(0, Math.abs(sy - st.y) - o.h * 0.5);
                 d = Math.hypot(dx, dy);
               } else {
-                d = Math.hypot(sx - o.x, sy - o.y) - (o.r || 16);
+                d = Math.hypot(sx - st.x, sy - st.y) - (o.r || 16);
               }
               if (d < minClear) minClear = d;
             }
@@ -628,10 +635,11 @@ export class RunnerSim extends Sim {
       }
       for (const o of ch.obstacles) {
         if (!o.solid || !o.jumpable) continue;
-        const dy = o.y - k.y;
+        const st = obstacleStateAt(o, this.raceTime || 0);
+        const dy = st.y - k.y;
         if (dy > 6 && dy < 55) {
           const hx = (o.w ? o.w * 0.5 : o.r || 16) + KART_R + 4;
-          if (Math.abs(k.x - o.x) < hx) {
+          if (Math.abs(k.x - st.x) < hx) {
             inp.jump = true;
             break;
           }

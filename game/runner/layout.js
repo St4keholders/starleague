@@ -150,6 +150,64 @@ export function isHazardAt(chunk, x, y) {
   return surf;
 }
 
+// Calcula el estado determinista de un obstáculo en el instante raceTime (SIN DOM)
+export function obstacleStateAt(obs, raceTime = 0) {
+  if (!obs || !obs.moving) {
+    return {
+      x: obs ? obs.x : 0,
+      y: obs ? obs.y : 0,
+      active: true,
+      warning: false,
+      k: 0,
+      dir: 1,
+      frame: 0,
+    };
+  }
+  if (obs.moveType === 'cross') {
+    const minX = obs.minX ?? obs.x - 120;
+    const maxX = obs.maxX ?? obs.x + 120;
+    const range = Math.max(20, maxX - minX);
+    const speed = obs.speed || 55;
+    const halfPeriod = range / speed;
+    const period = halfPeriod * 2;
+    const u = (((raceTime + (obs.phase || 0)) % period) + period) % period;
+    let cx;
+    let dir;
+    if (u < halfPeriod) {
+      cx = minX + u * speed;
+      dir = 1;
+    } else {
+      cx = maxX - (u - halfPeriod) * speed;
+      dir = -1;
+    }
+    const x = cx + (obs.flockDx || 0);
+    const y = obs.y + (obs.flockDy || 0);
+    const frame = Math.floor((raceTime + (obs.phase || 0)) * 6) % 2;
+    return { x, y, active: true, warning: false, k: 0, dir, frame };
+  }
+  if (obs.moveType === 'fire') {
+    const period = obs.period || 3.4;
+    const ph = (((raceTime + (obs.phase || 0)) % period) + period) % period;
+    const warn = 1.2;
+    const warning = ph > period - warn;
+    const active = ph > period - 0.35;
+    const k = warning ? (period - ph) / warn : 1;
+    const frame = Math.floor(raceTime * 10) % 2;
+    return {
+      x: obs.x,
+      y: obs.y,
+      active,
+      warning,
+      k,
+      phase: ph,
+      period,
+      dir: 1,
+      frame,
+    };
+  }
+  return { x: obs.x, y: obs.y, active: true, warning: false, k: 0, dir: 1, frame: 0 };
+}
+
 // Verifica que en el trozo exista al menos un pasillo vertical libre de ancho >= minWidth
 // haciendo un barrido en X cada 10 unidades dentro de los límites jugables del trozo.
 export function verifyFreeCorridor(seed, chunk, minWidth = MIN_CORRIDOR_W) {
@@ -166,7 +224,7 @@ export function verifyFreeCorridor(seed, chunk, minWidth = MIN_CORRIDOR_W) {
   for (let x = left; x <= right; x += 10) {
     let blocked = false;
     for (const o of chunk.obstacles) {
-      if (!o.solid) continue;
+      if (!o.solid || o.moving) continue;
       const hx = o.w ? o.w * 0.5 : o.r;
       if (Math.abs(x - o.x) < hx + 9) {
         blocked = true;
@@ -405,6 +463,145 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
         break;
       }
       void placed;
+    }
+
+    // Obstáculos en movimiento deterministas en función de raceTime
+    if (biome.id === 'granja') {
+      if (chunkIndex % 4 === 0) {
+        const my = Math.round((y0 + 50 + rng() * (CHUNK_LEN - 100)) * 10) / 10;
+        const cxy = centerX(seed, my);
+        const hwy = halfW(seed, my);
+        if (isHazardAt({ zones }, cxy, my) !== 'water') {
+          obstacles.push({
+            id: mkId('m'),
+            kind: 'tractor_side',
+            x: Math.round(cxy * 10) / 10,
+            y: my,
+            r: 26,
+            height: 42,
+            solid: true,
+            jumpable: false,
+            moving: true,
+            moveType: 'cross',
+            minX: Math.round((cxy - hwy + 54) * 10) / 10,
+            maxX: Math.round((cxy + hwy - 54) * 10) / 10,
+            speed: 70,
+            phase: Math.round(rng() * 12 * 100) / 100,
+          });
+        }
+      } else if (chunkIndex % 4 === 2) {
+        const my = Math.round((y0 + 56 + rng() * (CHUNK_LEN - 112)) * 10) / 10;
+        const cxy = centerX(seed, my);
+        const hwy = halfW(seed, my);
+        if (isHazardAt({ zones }, cxy, my) !== 'water') {
+          const flockCount = 3 + Math.floor(rng() * 3); // 3 a 5 ovejas
+          const phase = Math.round(rng() * 12 * 100) / 100;
+          const minX = Math.round((cxy - hwy + 70) * 10) / 10;
+          const maxX = Math.round((cxy + hwy - 70) * 10) / 10;
+          for (let sIdx = 0; sIdx < flockCount; sIdx++) {
+            const fdx = (sIdx - (flockCount - 1) * 0.5) * 26;
+            const fdy = (sIdx % 2 === 0 ? -1 : 1) * 8;
+            obstacles.push({
+              id: mkId('m'),
+              kind: 'sheep',
+              x: Math.round(cxy * 10) / 10,
+              y: my,
+              r: 12,
+              height: 16,
+              solid: true,
+              jumpable: true,
+              moving: true,
+              moveType: 'cross',
+              minX,
+              maxX,
+              speed: 38,
+              phase,
+              flockDx: Math.round(fdx * 10) / 10,
+              flockDy: Math.round(fdy * 10) / 10,
+            });
+          }
+        }
+      }
+    } else if (biome.id === 'playa' && chunkIndex % 2 === 0) {
+      const my = Math.round((y0 + 48 + rng() * (CHUNK_LEN - 96)) * 10) / 10;
+      const cxy = centerX(seed, my);
+      const hwy = halfW(seed, my);
+      obstacles.push({
+        id: mkId('m'),
+        kind: 'crab',
+        x: Math.round(cxy * 10) / 10,
+        y: my,
+        r: 14,
+        height: 16,
+        solid: true,
+        jumpable: true,
+        moving: true,
+        moveType: 'cross',
+        minX: Math.round((cxy - hwy + 52) * 10) / 10,
+        maxX: Math.round((cxy + hwy - 52) * 10) / 10,
+        speed: 55,
+        phase: Math.round(rng() * 10 * 100) / 100,
+      });
+    } else if (biome.id === 'volcan' && chunkIndex % 2 === 1) {
+      const my = Math.round((y0 + 48 + rng() * (CHUNK_LEN - 96)) * 10) / 10;
+      const cxy = centerX(seed, my);
+      const hwy = halfW(seed, my);
+      const gx = Math.round((cxy + (rng() * 2 - 1) * (hwy - 68)) * 10) / 10;
+      obstacles.push({
+        id: mkId('m'),
+        kind: 'fire',
+        skin: 'fire',
+        x: gx,
+        y: my,
+        r: 20,
+        height: 55,
+        solid: true,
+        jumpable: false,
+        moving: true,
+        moveType: 'fire',
+        period: 3.2,
+        phase: Math.round(rng() * 3.2 * 100) / 100,
+      });
+    } else if (biome.id === 'neon' && chunkIndex % 2 === 0) {
+      const my = Math.round((y0 + 48 + rng() * (CHUNK_LEN - 96)) * 10) / 10;
+      const cxy = centerX(seed, my);
+      const hwy = halfW(seed, my);
+      obstacles.push({
+        id: mkId('m'),
+        kind: 'hovercar',
+        x: Math.round(cxy * 10) / 10,
+        y: my,
+        r: 22,
+        height: 25,
+        solid: true,
+        jumpable: true,
+        moving: true,
+        moveType: 'cross',
+        minX: Math.round((cxy - hwy + 56) * 10) / 10,
+        maxX: Math.round((cxy + hwy - 56) * 10) / 10,
+        speed: 120,
+        phase: Math.round(rng() * 8 * 100) / 100,
+      });
+    } else if (biome.id === 'coliseo' && chunkIndex % 2 === 1) {
+      const my = Math.round((y0 + 48 + rng() * (CHUNK_LEN - 96)) * 10) / 10;
+      const cxy = centerX(seed, my);
+      const hwy = halfW(seed, my);
+      const mx = Math.round((cxy + (rng() * 2 - 1) * (hwy - 68)) * 10) / 10;
+      obstacles.push({
+        id: mkId('m'),
+        kind: 'meteor',
+        skin: 'meteor',
+        x: mx,
+        y: my,
+        r: 22,
+        height: 60,
+        solid: true,
+        jumpable: false,
+        moving: true,
+        moveType: 'fire',
+        period: 3.4,
+        phase: Math.round(rng() * 3.4 * 100) / 100,
+      });
     }
 
     // Rampas de salto adicionales (~1 cada 5 trozos)

@@ -1,6 +1,7 @@
 // Render pseudo-3D estilo "modo 7" + sprites + HUD
 import { VIEW_W, VIEW_H, SLOT_COLORS, SLOT_NAMES, LAPS } from './constants.js';
 import { getSprites, getShadowFrames, getAlienFrames, KART_FRAMES, KART_SPRITE } from './sprites.js';
+import { obstacleStateAt } from './runner/layout.js';
 
 const FONT = '"Press Start 2P", monospace';
 const FOG0 = 620, FOG1 = 1350;
@@ -277,6 +278,55 @@ export class Renderer {
               ctx.lineTo(mx1, my1);
               ctx.stroke();
             },
+          });
+        }
+        continue;
+      }
+      if (d.moving) {
+        const st = obstacleStateAt(d, sim.raceTime || 0);
+        if (d.moveType === 'fire') {
+          if (st.warning) {
+            const k = st.k;
+            const pg = this.proj(c, st.x, st.y, 0);
+            if (pg) {
+              push(pg, () => {
+                ctx.fillStyle = `rgba(0,0,0,${0.5 - k * 0.35})`;
+                const rr = (10 + (1 - k) * 18) * pg.s;
+                ctx.beginPath();
+                ctx.ellipse(pg.sx, pg.sy, rr, rr * 0.35, 0, 0, Math.PI * 2);
+                ctx.fill();
+              });
+            }
+            const p = this.proj(c, st.x, st.y, k * 280);
+            const fr = (d.skin === 'meteor' ? sp.fx.meteor : sp.fx.fire)[st.frame];
+            if (p) push({ ...p, f: p.f - 1 }, () => this.billboard(fr.c, p, fr.w));
+          }
+          continue;
+        }
+        if (d.kind === 'crab') {
+          const fr = sp.fx.crab[st.frame];
+          const p = this.proj(c, st.x, st.y, 0);
+          if (p && p.f >= CAM_DIST * 0.75) push(p, () => this.billboard(fr.c, p, fr.w));
+          continue;
+        }
+        if (d.kind === 'sheep') {
+          const spec = st.frame ? sp.decor.sheep2 : sp.decor.sheep;
+          const p = this.proj(c, st.x, st.y, 0);
+          if (p && p.f >= CAM_DIST * 0.75 && spec) {
+            push(p, () => {
+              this.shadow(p, c, st.x, st.y, 8);
+              this.billboard(spec.c, p, spec.w);
+            });
+          }
+          continue;
+        }
+        const spec = sp.decor[d.kind];
+        if (!spec) continue;
+        const p = this.proj(c, st.x, st.y, spec.float || 0);
+        if (p && p.f >= CAM_DIST * 0.75) {
+          push(p, () => {
+            this.shadow(p, c, st.x, st.y, d.r || 16);
+            this.billboard(spec.c, p, spec.w);
           });
         }
         continue;

@@ -1,7 +1,7 @@
 // Prueba sin navegador para «Supervivencia Estelar» (sección 8.2)
 // Importa SOLO módulos sin DOM. Si algo toca document o window, falla.
 
-import { generateChunk, verifyFreeCorridor } from '../game/runner/layout.js';
+import { generateChunk, verifyFreeCorridor, obstacleStateAt } from '../game/runner/layout.js';
 import { RunnerSim } from '../game/runner/sim.js';
 import { MIN_CORRIDOR_W } from '../game/runner/config.js';
 
@@ -242,6 +242,18 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   assert(k.surface === 'grass', 'El kart dentro de una zona grass debe tener surface="grass"');
   assert(tuft.cut === true && sim.world.grassCuts > 0, 'cutGrass debe cortar el mechón cercano y dejar surco persistente');
   assert(k.v <= k.maxV * 0.92 + 0.01, 'El pasto alto debe frenar la velocidad máxima a 0.92');
+
+  // Prueba de obstáculos móviles (tractor_side, sheep): determinismo en dos instancias al mismo raceTime
+  const chA = generateChunk(12345, 4, 1);
+  const chB = generateChunk(12345, 4, 1);
+  const movA = chA.obstacles.find((o) => o.moving);
+  const movB = chB.obstacles.find((o) => o.moving);
+  assert(movA && movB, 'El trozo 4 debe tener obstáculo móvil en la granja');
+  const st0 = obstacleStateAt(movA, 0);
+  const st1A = obstacleStateAt(movA, 2.35);
+  const st1B = obstacleStateAt(movB, 2.35);
+  assert(st1A.x === st1B.x && st1A.y === st1B.y && st1A.frame === st1B.frame, 'Dos instancias con misma semilla y raceTime deben dar igual posición móvil');
+  assert(Math.abs(st1A.x - st0.x) > 5, 'El obstáculo móvil debe desplazarse con raceTime');
 }
 
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades
