@@ -1,9 +1,9 @@
 // Prueba sin navegador para «Supervivencia Estelar» (sección 8.2)
 // Importa SOLO módulos sin DOM. Si algo toca document o window, falla.
 
-import { generateChunk, verifyFreeCorridor, obstacleStateAt } from '../game/runner/layout.js';
+import { generateChunk, verifyFreeCorridor, obstacleStateAt, biomeAt } from '../game/runner/layout.js';
 import { RunnerSim } from '../game/runner/sim.js';
-import { MIN_CORRIDOR_W } from '../game/runner/config.js';
+import { MIN_CORRIDOR_W, BIOMES, BIOME_LENGTH, CHUNK_LEN } from '../game/runner/config.js';
 
 function assert(cond, msg) {
   if (!cond) {
@@ -254,6 +254,27 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   const st1B = obstacleStateAt(movB, 2.35);
   assert(st1A.x === st1B.x && st1A.y === st1B.y && st1A.frame === st1B.frame, 'Dos instancias con misma semilla y raceTime deben dar igual posición móvil');
   assert(Math.abs(st1A.x - st0.x) > 5, 'El obstáculo móvil debe desplazarse con raceTime');
+
+  // Prueba de los 8 biomas (T13): teletransporte por bioma, evento biome, arco gate y obstáculos propios
+  const bSim = new RunnerSim({ seed: 12345, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
+  bSim.started = true;
+  bSim.countdown = 0;
+  for (let bIdx = 0; bIdx < BIOMES.length; bIdx++) {
+    const targetY = bIdx * BIOME_LENGTH + 400;
+    const bm = biomeAt(targetY);
+    assert(bm.id === BIOMES[bIdx].id && bm.chaser === BIOMES[bIdx].chaser, `El bioma ${bIdx} debe ser ${BIOMES[bIdx].id}`);
+    bSim.karts[0].y = targetY;
+    bSim.chaserY = targetY - 500;
+    bSim.events.length = 0;
+    bSim.step(1 / 60);
+    assert(bSim.biome.id === BIOMES[bIdx].id, `RunnerSim debe actualizar su bioma a ${BIOMES[bIdx].id}`);
+    if (bIdx > 0) {
+      assert(bSim.events.some((ev) => ev.type === 'biome' && ev.name === BIOMES[bIdx].name), `Debe emitir evento biome al entrar a ${BIOMES[bIdx].name}`);
+      const gateCi = Math.floor((bIdx * BIOME_LENGTH) / CHUNK_LEN);
+      const gateChunk = generateChunk(12345, gateCi, 1);
+      assert(gateChunk.decor.some((d) => d.kind === 'gate' && d.biomeName === BIOMES[bIdx].name), `El bioma ${BIOMES[bIdx].name} debe tener arco gate al inicio`);
+    }
+  }
 }
 
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades

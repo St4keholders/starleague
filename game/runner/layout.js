@@ -77,15 +77,69 @@ export function biomeAt(y) {
   };
 }
 
-// Tipos de obstáculos estáticos de la Granja de Otoño
-const FARM_OBSTACLES = [
-  { kind: 'haybale', r: 16, height: 18, solid: true, jumpable: true, weight: 30 },
-  { kind: 'pumpkin', r: 10, height: 14, solid: true, jumpable: true, weight: 28 },
-  { kind: 'fence', w: 76, h: 14, r: 38, height: 18, solid: true, jumpable: true, weight: 22 },
-  { kind: 'tractor', r: 28, height: 45, solid: true, jumpable: false, weight: 10 },
-  { kind: 'barn', w: 110, h: 100, r: 55, height: 60, solid: true, jumpable: false, weight: 6 },
-  { kind: 'silo', r: 30, height: 65, solid: true, jumpable: false, weight: 5 },
-];
+// Tipos de obstáculos estáticos por bioma (sección 1.5)
+const BIOME_OBSTACLES = {
+  granja: [
+    { kind: 'haybale', r: 16, height: 18, solid: true, jumpable: true, weight: 30 },
+    { kind: 'pumpkin', r: 10, height: 14, solid: true, jumpable: true, weight: 28 },
+    { kind: 'fence', w: 76, h: 14, r: 38, height: 18, solid: true, jumpable: true, weight: 22 },
+    { kind: 'tractor', r: 28, height: 45, solid: true, jumpable: false, weight: 10 },
+    { kind: 'barn', w: 110, h: 100, r: 55, height: 60, solid: true, jumpable: false, weight: 6 },
+    { kind: 'silo', r: 30, height: 65, solid: true, jumpable: false, weight: 5 },
+  ],
+  playa: [
+    { kind: 'rock', r: 14, height: 16, solid: true, jumpable: true, weight: 34 },
+    { kind: 'umbrella', r: 16, height: 28, solid: true, jumpable: false, weight: 26 },
+    { kind: 'palm', r: 18, height: 55, solid: true, jumpable: false, weight: 22 },
+  ],
+  nieve: [
+    { kind: 'snowman', r: 15, height: 22, solid: true, jumpable: true, weight: 30 },
+    { kind: 'fence', w: 76, h: 14, r: 38, height: 18, solid: true, jumpable: true, weight: 24 },
+    { kind: 'crystal', r: 14, height: 26, solid: true, jumpable: false, weight: 22 },
+    { kind: 'pine', r: 18, height: 52, solid: true, jumpable: false, weight: 24 },
+  ],
+  volcan: [
+    { kind: 'lavarock', r: 16, height: 18, solid: true, jumpable: true, weight: 36 },
+    { kind: 'deadtree', r: 14, height: 36, solid: true, jumpable: false, weight: 28 },
+    { kind: 'tower', r: 28, height: 65, solid: true, jumpable: false, weight: 16 },
+  ],
+  jungla: [
+    { kind: 'spore', r: 12, height: 18, solid: true, jumpable: true, weight: 28 },
+    { kind: 'rock', r: 14, height: 16, solid: true, jumpable: true, weight: 22 },
+    { kind: 'mushroom', r: 20, height: 36, solid: true, jumpable: false, weight: 26 },
+    { kind: 'alienplant', r: 18, height: 42, solid: true, jumpable: false, weight: 24 },
+  ],
+  neon: [
+    { kind: 'pylon', r: 10, height: 32, solid: true, jumpable: false, weight: 34 },
+    { kind: 'neonsign', r: 18, height: 34, solid: true, jumpable: false, weight: 32 },
+    { kind: 'tower2', r: 28, height: 70, solid: true, jumpable: false, weight: 18 },
+  ],
+  estelar: [
+    { kind: 'ringrock', r: 16, height: 18, solid: true, jumpable: true, weight: 30 },
+    { kind: 'asteroid', r: 18, height: 22, solid: true, jumpable: true, weight: 26 },
+    { kind: 'satellite', r: 18, height: 22, solid: true, jumpable: true, weight: 20 },
+    { kind: 'starcrystal', r: 16, height: 28, solid: true, jumpable: false, weight: 24 },
+  ],
+  coliseo: [
+    { kind: 'spike', r: 16, height: 20, solid: true, jumpable: true, weight: 28 },
+    { kind: 'brazier', r: 13, height: 26, solid: true, jumpable: false, weight: 22 },
+    { kind: 'obelisk', r: 16, height: 50, solid: true, jumpable: false, weight: 18 },
+    { kind: 'zorgstatue', r: 24, height: 60, solid: true, jumpable: false, weight: 14 },
+    { kind: 'pillar', r: 26, height: 68, solid: true, jumpable: false, weight: 10 },
+    { kind: 'stand', w: 80, h: 32, r: 40, height: 36, solid: true, jumpable: false, weight: 8 },
+  ],
+};
+
+const BIOME_DECOR = {
+  granja: ['windmill2', 'tree', 'bush', 'silo'],
+  playa: ['palm', 'umbrella', 'rock'],
+  nieve: ['pine', 'snowman', 'crystal'],
+  volcan: ['tower', 'lavarock', 'deadtree'],
+  jungla: ['alienplant', 'mushroom', 'spore'],
+  neon: ['tower2', 'neonsign', 'pylon'],
+  estelar: ['ringrock', 'asteroid', 'satellite', 'starcrystal'],
+  coliseo: ['stand', 'zorgstatue', 'pillar', 'flag'],
+};
 
 function pickWeighted(rng, list) {
   let total = 0;
@@ -280,10 +334,26 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
   const corrMinX = corrCenter - corrHalf;
   const corrMaxX = corrCenter + corrHalf;
 
+  // Arco de bienvenida cuando la frontera de un nuevo bioma (rawIndex * BIOME_LENGTH) cae en [y0, y1)
+  const bEnd = biomeAt(y1 - 1);
+  const biomeStartY = bEnd.rawIndex * BIOME_LENGTH;
+  if (bEnd.rawIndex > 0 && biomeStartY >= y0 && biomeStartY < y1) {
+    const gy = biomeStartY + 24;
+    const gcx = Math.round(centerX(seed, gy) * 10) / 10;
+    decor.push({
+      id: mkId('gate'),
+      kind: 'gate',
+      x: gcx,
+      y: gy,
+      solid: false,
+      biomeName: bEnd.name,
+    });
+  }
+
   // Los primeros 3 trozos (zona de salida) no tienen obstáculos
   if (chunkIndex >= SAFE_START_CHUNKS) {
-    // Lagos (con grietas de hielo seguros o lagos de agua abierta con isla y puente)
-    if (chunkIndex % 5 === 1) {
+    // Zonas de terreno y peligros según el bioma (sección 1.5)
+    if (biome.id === 'granja' && chunkIndex % 5 === 1) {
       const frozen = chunkIndex % 10 === 1 || rng() < 0.55;
       const wy0 = Math.round((y0 + 36 + rng() * 24) * 10) / 10;
       const wy1 = Math.round((wy0 + 76 + rng() * 28) * 10) / 10;
@@ -292,7 +362,6 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
       const hwy = halfW(seed, wyMid);
 
       if (frozen) {
-        // Lago congelado con grietas de hielo (seguro para cruzar)
         const wx = cxy + (rng() * 2 - 1) * (hwy * 0.35);
         const ww = 120 + rng() * 80;
         zones.push({
@@ -305,7 +374,6 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
           y1: wy1,
         });
       } else {
-        // Lago lateral de agua abierta (quita 1 corazón) fuera del pasillo libre, con isla y puente
         const side = corrCenter >= cxy ? -1 : 1;
         const lakeHalfW = 90 + rng() * 30;
         const lakeCx = side < 0
@@ -322,7 +390,6 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
           y0: wy0,
           y1: wy1,
         });
-        // Isla en medio del lago
         const islX = Math.round((lakeCx + side * 18) * 10) / 10;
         const islY = Math.round(wyMid * 10) / 10;
         zones.push({
@@ -337,7 +404,6 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
           y0: islY - 26,
           y1: islY + 26,
         });
-        // Puente seguro en el borde del lago más cercano al centro
         const brX = side < 0 ? wx1 - 28 : wx0 + 28;
         zones.push({
           id: mkId('z'),
@@ -348,6 +414,120 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
           y1: Math.round((wy1 + 6) * 10) / 10,
         });
       }
+    } else if (biome.id === 'playa' && chunkIndex % 4 === 1) {
+      // Canales de agua sin hielo con puente
+      const wy0 = Math.round((y0 + 44 + rng() * 24) * 10) / 10;
+      const wy1 = Math.round((wy0 + 52 + rng() * 20) * 10) / 10;
+      const wyMid = (wy0 + wy1) * 0.5;
+      const cxy = centerX(seed, wyMid);
+      const hwy = halfW(seed, wyMid);
+      const side = corrCenter >= cxy ? -1 : 1;
+      const chHalfW = 85 + rng() * 30;
+      const chCx = side < 0
+        ? Math.max(cxy - hwy + chHalfW + 24, corrMinX - chHalfW - 14)
+        : Math.min(cxy + hwy - chHalfW - 24, corrMaxX + chHalfW + 14);
+      const wx0 = Math.round((chCx - chHalfW) * 10) / 10;
+      const wx1 = Math.round((chCx + chHalfW) * 10) / 10;
+      zones.push({ id: mkId('z'), type: 'water', frozen: false, x0: wx0, x1: wx1, y0: wy0, y1: wy1 });
+      zones.push({
+        id: mkId('z'),
+        type: 'bridge',
+        x0: Math.round((chCx - 24) * 10) / 10,
+        x1: Math.round((chCx + 24) * 10) / 10,
+        y0: Math.round((wy0 - 6) * 10) / 10,
+        y1: Math.round((wy1 + 6) * 10) / 10,
+      });
+    } else if (biome.id === 'nieve' && chunkIndex % 2 === 0) {
+      // Placas de hielo resbaloso y lagos congelados seguros
+      const iy0 = Math.round((y0 + 26 + rng() * 28) * 10) / 10;
+      const iy1 = Math.round((iy0 + 84 + rng() * 38) * 10) / 10;
+      const iyMid = (iy0 + iy1) * 0.5;
+      const cxy = centerX(seed, iyMid);
+      const hwy = halfW(seed, iyMid);
+      const ix = cxy + (rng() * 2 - 1) * (hwy * 0.35);
+      const iw = 100 + rng() * 70;
+      zones.push({
+        id: mkId('z'),
+        type: chunkIndex % 4 === 0 ? 'water' : 'ice',
+        frozen: true,
+        x0: Math.round((ix - iw) * 10) / 10,
+        x1: Math.round((ix + iw) * 10) / 10,
+        y0: iy0,
+        y1: iy1,
+      });
+    } else if (biome.id === 'volcan' && chunkIndex % 4 === 1) {
+      // Ríos de lava con puente
+      const ly0 = Math.round((y0 + 42 + rng() * 24) * 10) / 10;
+      const ly1 = Math.round((ly0 + 62 + rng() * 24) * 10) / 10;
+      const lyMid = (ly0 + ly1) * 0.5;
+      const cxy = centerX(seed, lyMid);
+      const hwy = halfW(seed, lyMid);
+      const side = corrCenter >= cxy ? -1 : 1;
+      const lvHalfW = 85 + rng() * 30;
+      const lvCx = side < 0
+        ? Math.max(cxy - hwy + lvHalfW + 24, corrMinX - lvHalfW - 14)
+        : Math.min(cxy + hwy - lvHalfW - 24, corrMaxX + lvHalfW + 14);
+      zones.push({
+        id: mkId('z'),
+        type: 'lava',
+        x0: Math.round((lvCx - lvHalfW) * 10) / 10,
+        x1: Math.round((lvCx + lvHalfW) * 10) / 10,
+        y0: ly0,
+        y1: ly1,
+      });
+      zones.push({
+        id: mkId('z'),
+        type: 'bridge',
+        x0: Math.round((lvCx - 24) * 10) / 10,
+        x1: Math.round((lvCx + 24) * 10) / 10,
+        y0: Math.round((ly0 - 6) * 10) / 10,
+        y1: Math.round((ly1 + 6) * 10) / 10,
+      });
+    } else if (biome.id === 'jungla' && chunkIndex % 3 === 1) {
+      // Charcos de baba que frenan (zona goo)
+      const gy0 = Math.round((y0 + 36 + rng() * 30) * 10) / 10;
+      const gy1 = Math.round((gy0 + 68 + rng() * 30) * 10) / 10;
+      const gyMid = (gy0 + gy1) * 0.5;
+      const cxy = centerX(seed, gyMid);
+      const hwy = halfW(seed, gyMid);
+      const gx = cxy + (rng() * 2 - 1) * (hwy * 0.42);
+      const gw = 75 + rng() * 45;
+      zones.push({
+        id: mkId('z'),
+        type: 'goo',
+        x0: Math.round((gx - gw) * 10) / 10,
+        x1: Math.round((gx + gw) * 10) / 10,
+        y0: gy0,
+        y1: gy1,
+      });
+    } else if (biome.id === 'estelar' && chunkIndex % 4 === 1) {
+      // Huecos al vacío con puentes
+      const hy0 = Math.round((y0 + 42 + rng() * 24) * 10) / 10;
+      const hy1 = Math.round((hy0 + 64 + rng() * 24) * 10) / 10;
+      const hyMid = (hy0 + hy1) * 0.5;
+      const cxy = centerX(seed, hyMid);
+      const hwy = halfW(seed, hyMid);
+      const side = corrCenter >= cxy ? -1 : 1;
+      const hlHalfW = 85 + rng() * 30;
+      const hlCx = side < 0
+        ? Math.max(cxy - hwy + hlHalfW + 24, corrMinX - hlHalfW - 14)
+        : Math.min(cxy + hwy - hlHalfW - 24, corrMaxX + hlHalfW + 14);
+      zones.push({
+        id: mkId('z'),
+        type: 'hole',
+        x0: Math.round((hlCx - hlHalfW) * 10) / 10,
+        x1: Math.round((hlCx + hlHalfW) * 10) / 10,
+        y0: hy0,
+        y1: hy1,
+      });
+      zones.push({
+        id: mkId('z'),
+        type: 'bridge',
+        x0: Math.round((hlCx - 24) * 10) / 10,
+        x1: Math.round((hlCx + 24) * 10) / 10,
+        y0: Math.round((hy0 - 6) * 10) / 10,
+        y1: Math.round((hy1 + 6) * 10) / 10,
+      });
     }
 
     // Zonas de pasto/trigo alto que deja surco (granja y jungla)
@@ -362,7 +542,8 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
       const gx = cxy + gSide * (40 + rng() * Math.max(20, hwy - gHalfW - 65));
       const gx0 = Math.round((gx - gHalfW) * 10) / 10;
       const gx1 = Math.round((gx + gHalfW) * 10) / 10;
-      if (isHazardAt({ zones }, gx, gyMid) !== 'water') {
+      const hz = isHazardAt({ zones }, gx, gyMid);
+      if (hz !== 'water' && hz !== 'lava' && hz !== 'hole') {
         zones.push({
           id: mkId('z'),
           type: 'grass',
@@ -377,7 +558,8 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
           for (let tx = gx0 + 16; tx <= gx1 - 12; tx += 38) {
             const jx = Math.round((tx + (rng() - 0.5) * 16) * 10) / 10;
             const jy = Math.round((ty + (rng() - 0.5) * 16) * 10) / 10;
-            if (isHazardAt({ zones }, jx, jy) === 'water') continue;
+            const thz = isHazardAt({ zones }, jx, jy);
+            if (thz === 'water' || thz === 'lava' || thz === 'hole') continue;
             decor.push({
               id: mkId('gt'),
               kind: 'grasstuft',
@@ -394,9 +576,10 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
 
     const dens = DIFF_OBS_DENSITY[difficulty] ?? 1.0;
     const baseCount = Math.max(1, Math.round((2 + Math.floor(rng() * 3)) * dens));
+    const biomeObsList = BIOME_OBSTACLES[biome.id] || BIOME_OBSTACLES.granja;
 
     for (let i = 0; i < baseCount; i++) {
-      const tpl = pickWeighted(rng, FARM_OBSTACLES);
+      const tpl = pickWeighted(rng, biomeObsList);
       const y = tpl.kind === 'barn'
         ? y0 + 128 + rng() * 10
         : y0 + 24 + rng() * (CHUNK_LEN - 48);
@@ -412,7 +595,8 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
         const ry = Math.round(y * 10) / 10;
         if (overlapsCorridor(x, halfExt + 10, corrMinX, corrMaxX)) continue;
         if (overlapsExisting(x, ry, halfExt, obstacles, 18)) continue;
-        if (isHazardAt({ zones }, x, ry) === 'water') continue;
+        const ohz = isHazardAt({ zones }, x, ry);
+        if (ohz === 'water' || ohz === 'lava' || ohz === 'hole') continue;
 
         const obs = {
           id: mkId('o'),
@@ -622,8 +806,9 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
       }
     }
 
-    // Franja de turbo en el piso (~1 cada BOOST_SPACING = 900 u)
-    if (rng() < CHUNK_LEN / BOOST_SPACING) {
+    // Franja de turbo en el piso (~1 cada BOOST_SPACING = 900 u, más frecuente en Ciudad Neón)
+    const boostChance = biome.id === 'neon' ? (CHUNK_LEN * 2.2) / BOOST_SPACING : CHUNK_LEN / BOOST_SPACING;
+    if (rng() < boostChance) {
       const by = Math.round((y0 + 36 + rng() * (CHUNK_LEN - 96)) * 10) / 10;
       const cxy = centerX(seed, by);
       const hwy = halfW(seed, by);
@@ -704,7 +889,7 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
   }
 
   // Adornos fuera de las paredes laterales (no sólidos)
-  const decorKinds = ['windmill2', 'tree', 'bush', 'silo'];
+  const decorKinds = BIOME_DECOR[biome.id] || BIOME_DECOR.granja;
   for (const side of [-1, 1]) {
     const count = 1 + (rng() < 0.65 ? 1 : 0);
     for (let i = 0; i < count; i++) {

@@ -136,7 +136,8 @@ export class RunnerWorld {
       const v = (row0 + r) & 2047;
       const wy = (chunkIndex * CHUNK_TEX_ROWS + r) * TEX_SCALE;
       const b = biomeAt(wy);
-      const curA = getThemeAssets(b.theme);
+      const effTheme = b.altTheme && b.localY < 4500 ? b.altTheme : b.theme;
+      const curA = getThemeAssets(effTheme);
       const prevA = b.inTransition ? getThemeAssets(b.prevTheme) : curA;
       const threshold = (b.t01 * 16) | 0;
 
@@ -276,6 +277,51 @@ export class RunnerWorld {
       }
     }
 
+    // 2.6 Zonas de hielo (ice), lava (lava), baba (goo) y huecos al vacío (hole)
+    const lavaDark = toU32('#8a1e0c');
+    const lavaMid = toU32('#ff4a14');
+    const lavaHot = toU32('#ffd23f');
+    const gooDark = toU32('#2a9834');
+    const gooMid = toU32('#76ea3a');
+    const gooBub = toU32('#c8ff6a');
+    const holeVoid = toU32('#05020a');
+    const holeRim = toU32('#b44dff');
+    const holeStar = toU32('#7ff6ff');
+    for (const z of chunk.zones) {
+      if (z.type !== 'ice' && z.type !== 'lava' && z.type !== 'goo' && z.type !== 'hole') continue;
+      const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
+      const u1 = Math.min(MAP_SIZE - 1, (z.x1 / TEX_SCALE) | 0);
+      const vr0 = (z.y0 / TEX_SCALE) | 0;
+      const vr1 = (z.y1 / TEX_SCALE) | 0;
+      for (let vr = vr0; vr <= vr1; vr++) {
+        const vv = vr & 2047;
+        const rowOff = vv << 11;
+        const borderY = vr <= vr0 + 1 || vr >= vr1 - 1;
+        for (let uu = u0; uu <= u1; uu++) {
+          const borderX = uu <= u0 + 1 || uu >= u1 - 1;
+          if (z.type === 'ice') {
+            if (borderX || borderY) tex[rowOff | uu] = waterFoam;
+            else tex[rowOff | uu] = ((uu + vr * 3) % 17 === 0) ? iceCrack : (((uu ^ vr) & 4) ? iceLight : iceBase);
+          } else if (z.type === 'lava') {
+            if (borderX || borderY) tex[rowOff | uu] = lavaDark;
+            else {
+              const h = ((uu * 5 + vr * 11) ^ (vr >> 1)) & 15;
+              tex[rowOff | uu] = h < 3 ? lavaHot : h < 11 ? lavaMid : lavaDark;
+            }
+          } else if (z.type === 'goo') {
+            if (borderX || borderY) tex[rowOff | uu] = gooDark;
+            else {
+              const h = ((uu * 9 + vr * 7) ^ (uu >> 1)) & 15;
+              tex[rowOff | uu] = h < 2 ? gooBub : h < 11 ? gooMid : gooDark;
+            }
+          } else if (z.type === 'hole') {
+            if (borderX || borderY) tex[rowOff | uu] = holeRim;
+            else tex[rowOff | uu] = ((uu * 31 + vr * 17) & 63) === 0 ? holeStar : holeVoid;
+          }
+        }
+      }
+    }
+
     // 3. Puentes, turbos y rampas encima
     for (const z of chunk.zones) {
       if (z.type === 'boost') {
@@ -369,7 +415,8 @@ export class RunnerWorld {
 
   applyBiomeFor(renderer, y) {
     const b = biomeAt(y);
-    const A = getThemeAssets(b.theme);
+    const effTheme = b.altTheme && b.localY < 4500 ? b.altTheme : b.theme;
+    const A = getThemeAssets(effTheme);
     this.theme = A.theme;
     this.th = A.th;
     this.sky = A.sky;

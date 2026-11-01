@@ -800,6 +800,116 @@ function makeDecor() {
     rect(x, 33, 8, 2, 3, '#ff4d5e');
     add('hovercar', c, 50, 12);
   }
+  { // arco de bienvenida entre biomas (gate)
+    const c = mkCanvas(72, 48), x = c.getContext('2d');
+    // dos postes laterales de madera y piedra con banderines
+    rect(x, 4, 8, 7, 40, '#6a4020'); rect(x, 5, 8, 2, 40, '#9a6234');
+    rect(x, 61, 8, 7, 40, '#6a4020'); rect(x, 62, 8, 2, 40, '#9a6234');
+    rect(x, 2, 42, 11, 6, '#5a5e68'); rect(x, 59, 42, 11, 6, '#5a5e68');
+    // viga superior con letrero y estrellas
+    rect(x, 2, 4, 68, 12, '#7a4a24');
+    rect(x, 4, 6, 64, 8, '#1e162b');
+    rect(x, 4, 5, 64, 1, '#ffd23f');
+    rect(x, 4, 14, 64, 1, '#ffd23f');
+    for (let i = 0; i < 7; i++) {
+      rect(x, 9 + i * 9, 8, 5, 4, i % 2 === 0 ? '#ffd23f' : '#7ff6ff');
+    }
+    // banderines colgantes bajo la viga
+    for (let i = 0; i < 8; i++) {
+      const bx = 11 + i * 6;
+      x.fillStyle = ['#ff4d5e', '#ffd23f', '#3ddc84', '#59c8ff'][i % 4];
+      x.beginPath(); x.moveTo(bx, 16); x.lineTo(bx + 5, 16); x.lineTo(bx + 2.5, 21); x.closePath(); x.fill();
+    }
+    add('gate', c, 160);
+  }
+  { // perseguidores de los 8 biomas (120-200 u)
+    // 1. stampede (vacas y ovejas en nube de polvo)
+    const c1 = mkCanvas(64, 34), x1 = c1.getContext('2d');
+    for (let i = 0; i < 6; i++) {
+      ell(x1, 8 + i * 10, 24 - (i % 2) * 3, 9, 7, i % 2 ? '#d89a5a' : '#c48244');
+    }
+    // vaca al centro y ovejas a los lados
+    rect(x1, 24, 10, 16, 12, '#f4f4f8'); rect(x1, 26, 12, 5, 5, '#262228'); rect(x1, 34, 14, 4, 4, '#262228');
+    rect(x1, 27, 6, 10, 7, '#e8e4ec'); rect(x1, 25, 4, 3, 3, '#d8c8b0'); rect(x1, 36, 4, 3, 3, '#d8c8b0');
+    ell(x1, 20, 11, 5, 3, '#ff9aa8');
+    disc(x1, 12, 16, 6, '#ffffff'); disc(x1, 12, 15, 3, '#26242c');
+    disc(x1, 52, 16, 6, '#ffffff'); disc(x1, 52, 15, 3, '#26242c');
+    add('stampede', c1, 150);
+
+    // 2. wave (ola azul gigante con espuma blanca)
+    const c2 = mkCanvas(64, 38), x2 = c2.getContext('2d');
+    rect(x2, 2, 14, 60, 22, '#1458b8');
+    rect(x2, 4, 10, 56, 14, '#2478e0');
+    rect(x2, 6, 7, 52, 8, '#4ea4ff');
+    for (let i = 0; i < 7; i++) {
+      disc(x2, 7 + i * 8, 7 + (i % 2) * 2, 5, '#ffffff');
+      disc(x2, 9 + i * 8, 10, 4, '#cfe9ff');
+    }
+    add('wave', c2, 160);
+
+    // 3. avalanche (frente de nieve y hielo)
+    const c3 = mkCanvas(64, 38), x3 = c3.getContext('2d');
+    for (let i = 0; i < 6; i++) {
+      disc(x3, 9 + i * 9, 22 - (i % 2) * 4, 11, '#d8ecff');
+      disc(x3, 9 + i * 9, 19 - (i % 2) * 4, 9, '#ffffff');
+    }
+    rect(x3, 16, 8, 7, 7, '#8ad8ff'); rect(x3, 38, 10, 8, 6, '#8ad8ff');
+    add('avalanche', c3, 160);
+
+    // 4. lavaflow (río de lava con burbujas incandescentes)
+    const c4 = mkCanvas(64, 34), x4 = c4.getContext('2d');
+    rect(x4, 2, 14, 60, 18, '#4a1410');
+    for (let i = 0; i < 6; i++) {
+      disc(x4, 8 + i * 10, 20, 9, '#d83814');
+      disc(x4, 8 + i * 10, 18, 6, '#ff7a1a');
+      disc(x4, 9 + i * 10, 16, 3, '#ffd23f');
+    }
+    add('lavaflow', c4, 160);
+
+    // 5. goowave (ola de baba verde ácida)
+    const c5 = mkCanvas(64, 36), x5 = c5.getContext('2d');
+    for (let i = 0; i < 6; i++) {
+      disc(x5, 8 + i * 10, 21 - (i % 2) * 3, 10, '#2aa83a');
+      disc(x5, 8 + i * 10, 18 - (i % 2) * 3, 7, '#76ea3a');
+      disc(x5, 10 + i * 10, 15, 3, '#d8ff7a');
+    }
+    disc(x5, 22, 12, 3, '#a84dff'); disc(x5, 44, 14, 3, '#a84dff');
+    add('goowave', c5, 160);
+
+    // 6. glitchstorm (tormenta de glitch cian y magenta)
+    const c6 = mkCanvas(64, 38), x6 = c6.getContext('2d');
+    rect(x6, 4, 8, 56, 26, '#140c2c');
+    for (let i = 0; i < 22; i++) {
+      const gx = 4 + ((i * 17) % 50);
+      const gy = 6 + ((i * 11) % 24);
+      const gw = 4 + (i % 3) * 4;
+      const gh = 3 + (i % 2) * 3;
+      rect(x6, gx, gy, gw, gh, ['#ff2ea6', '#2ef0ff', '#ffd23f', '#b44dff'][i % 4]);
+    }
+    add('glitchstorm', c6, 165);
+
+    // 7. blackhole (espiral morada y horizonte negro)
+    const c7 = mkCanvas(56, 44), x7 = c7.getContext('2d');
+    disc(x7, 28, 22, 20, '#3a1068');
+    disc(x7, 28, 22, 16, '#7a28d8');
+    disc(x7, 28, 22, 12, '#c86aff');
+    disc(x7, 28, 22, 8, '#06020c');
+    x7.strokeStyle = '#7ff6ff'; x7.lineWidth = 2;
+    x7.beginPath(); x7.arc(28, 22, 10, 0.3, 2.6); x7.stroke();
+    x7.beginPath(); x7.arc(28, 22, 14, 3.4, 5.7); x7.stroke();
+    add('blackhole', c7, 175, 8);
+
+    // 8. zorgship (nave de Zorg verde con cúpula y luces)
+    const c8 = mkCanvas(68, 38), x8 = c8.getContext('2d');
+    ell(x8, 34, 14, 14, 9, '#7ff6ff');
+    ell(x8, 34, 22, 31, 9, '#2a3830');
+    ell(x8, 34, 20, 27, 7, '#465e4e');
+    for (let i = 0; i < 6; i++) {
+      disc(x8, 12 + i * 9, 22, 3, i % 2 === 0 ? '#9dff3a' : '#ffd23f');
+    }
+    rect(x8, 26, 29, 16, 7, '#9dff3a');
+    add('zorgship', c8, 190, 14);
+  }
   return D;
 }
 

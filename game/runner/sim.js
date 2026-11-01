@@ -200,6 +200,23 @@ export class RunnerSim extends Sim {
       }
     }
 
+    // Partículas de la banda del perseguidor según el bioma (sección 4.3)
+    const chColors = {
+      granja: '#d89a5a',
+      playa: '#cfe9ff',
+      nieve: '#ffffff',
+      volcan: '#ff7a1a',
+      jungla: '#9dff3a',
+      neon: '#ff2ea6',
+      estelar: '#b44dff',
+      coliseo: '#9dff3a',
+    };
+    const pCol = chColors[this.biome.id] || '#d89a5a';
+    const chCx = centerX(this.seed, this.chaserY);
+    const chHw = halfW(this.seed, this.chaserY);
+    const px = chCx + (this.rng() * 2 - 1) * (chHw - 30);
+    this.part(px, this.chaserY + 6, 4 + this.rng() * 14, (this.rng() - 0.5) * 40, 20 + this.rng() * 40, 25 + this.rng() * 30, 0.35, pCol, 2.5);
+
     this.rank();
     this.checkEnd(dt);
   }
@@ -615,7 +632,8 @@ export class RunnerSim extends Sim {
         }
 
         const curOff = k.x - centerX(this.seed, k.y);
-        let score = minClear * 5 + hazardPen - Math.abs(candOff - curOff) * 0.12 - Math.abs(candOff) * 0.04;
+        const clearScore = minClear < 24 ? (minClear - 24) * 45 : Math.min(90, minClear) * 4;
+        let score = clearScore + hazardPen - Math.abs(candOff - curOff) * 0.12 - Math.abs(candOff) * 0.04;
         if (score > bestScore) {
           bestScore = score;
           bestOff = candOff;

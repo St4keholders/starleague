@@ -1,7 +1,7 @@
 // Render pseudo-3D estilo "modo 7" + sprites + HUD
 import { VIEW_W, VIEW_H, SLOT_COLORS, SLOT_NAMES, LAPS } from './constants.js';
 import { getSprites, getShadowFrames, getAlienFrames, KART_FRAMES, KART_SPRITE } from './sprites.js';
-import { obstacleStateAt } from './runner/layout.js';
+import { centerX, halfW, biomeAt, obstacleStateAt } from './runner/layout.js';
 
 const FONT = '"Press Start 2P", monospace';
 const FOG0 = 620, FOG1 = 1350;
@@ -342,7 +342,41 @@ export class Renderer {
       const py = d.kind === 'barn' && d.h ? d.y - d.h * 0.45 : d.y;
       const p = this.proj(c, d.x, py, spec.float || 0);
       if (p && p.f < CAM_DIST * 0.75) continue;
+      if (d.kind === 'gate' && d.biomeName) {
+        push(p, () => {
+          this.billboard(spec.c, p, spec.w);
+          const sc = (spec.w / spec.c.width) * p.s;
+          const h = spec.c.height * sc;
+          const fontSz = Math.max(5, Math.min(12, Math.round(7 * p.s * 1.3)));
+          this.text(d.biomeName.toUpperCase(), Math.round(p.sx), Math.round(p.sy - h * 0.86), fontSz, '#ffd23f', 'center');
+        });
+        continue;
+      }
       push(p, () => this.billboard(spec.c, p, spec.w, d.kind === 'starcrystal' || d.kind === 'asteroid' ? Math.sin(time * 2 + d.x) * 4 * p.s : 0));
+    }
+    // banda del perseguidor en Supervivencia Estelar (sección 4.3)
+    if (this.t.runner && sim.chaserY !== undefined) {
+      const cy = sim.chaserY;
+      if (cy > c.y - 80 && cy < c.y + 1350) {
+        const cb = biomeAt(cy);
+        const chSpec = sp.decor[cb.chaser] || sp.decor.stampede;
+        const seed = this.t.seed || 12345;
+        const cx = centerX(seed, cy);
+        const hw = halfW(seed, cy);
+        if (chSpec) {
+          for (let ox = -hw + 20; ox <= hw - 20; ox += 42) {
+            const wx = cx + ox;
+            const wy = cy + Math.sin(time * 5 + ox * 0.04) * 6;
+            const wz = (chSpec.float || 0) + Math.abs(Math.sin(time * 9 + ox * 0.08)) * 5;
+            const p = this.proj(c, wx, wy, wz);
+            if (p) {
+              const isCenter = Math.abs(ox) < 22;
+              const wMul = isCenter ? 1.35 : 0.92;
+              push(p, () => this.billboard(chSpec.c, p, chSpec.w * wMul));
+            }
+          }
+        }
+      }
     }
     // cajas
     for (const b of sim.boxes) {
@@ -550,6 +584,9 @@ export class Renderer {
       const distM = Math.max(0, Math.round(k.distance || Math.max(0, (k.y - (k.startY || 0)) / 10)));
       this.text(`${distM.toLocaleString('es-ES')} m`, R, pad, big ? 10 : 7, '#ffd23f', 'right');
       this.text(fmtTime(k.eliminated ? (k.survived || k.elimAt || 0) : sim.raceTime), R, pad + (big ? 13 : 9), big ? 8 : 6, '#c8f0ff', 'right');
+      if (sim.started && sim.biomeBanner && sim.biomeBanner.t > 0) {
+        this.text(`¡${sim.biomeBanner.name.toUpperCase()}!`, vw / 2, Math.round(vh * 0.19), big ? 11 : 7, '#ffd23f', 'center');
+      }
     } else if (sim.mode === 'race') {
       const pc = k.place === 1 ? '#ffd23f' : k.place === 2 ? '#d8dce6' : k.place === 3 ? '#e8954a' : '#ffffff';
       this.text(`${k.place}º`, L, pad, big ? 24 : 14, pc);
