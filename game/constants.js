@@ -13,6 +13,7 @@ export const MAP_SHIFT = 11;
 export const MAX_PLAYERS = 4;
 export const RACE_KARTS = 8;
 export const BATTLE_KARTS = 6;
+export const RUNNER_KARTS = 6;
 export const LAPS = 3;
 export const CUP_POINTS = [15, 12, 10, 8, 6, 4, 2, 1];
 export const BATTLE_TIME = 150;
@@ -100,6 +101,7 @@ export const MODES = [
   { id: 'copa', name: 'Copa', desc: 'Las 5 pistas seguidas, con puntos y podio' },
   { id: 'rapida', name: 'Carrera rápida', desc: 'Una pista, una carrera' },
   { id: 'batalla', name: 'Batalla de globos', desc: '3 globos cada uno, gana el último' },
+  { id: 'supervivencia', name: 'Supervivencia Estelar', desc: 'Esquiva obstáculos en un camino sin fin; gana el último en pie' },
   { id: 'historia', name: 'Historia', desc: '10 niveles con cinemáticas contra el Barón Eclipse' },
 ];
 

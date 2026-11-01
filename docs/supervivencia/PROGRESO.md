@@ -3,7 +3,7 @@
 ## Lista de tareas
 
 - [x] **T01 Preparación:** rama, plan copiado, `PROGRESO.md`, compilación base OK (sección 0.2).
-- [ ] **T02 Config y modo en el lobby:** `game/runner/config.js` con todas las constantes y la tabla de biomas. Modo `supervivencia` en `MODES` (todavía arranca una carrera normal como relleno). Verificar: aparece en el lobby del TV y del celular; `npm run build`.
+- [x] **T02 Config y modo en el lobby:** `game/runner/config.js` con todas las constantes y la tabla de biomas. Modo `supervivencia` en `MODES` (todavía arranca una carrera normal como relleno). Verificar: aparece en el lobby del TV y del celular; `npm run build`.
 - [ ] **T03 Refactor seguro de `Sim`:** métodos `placeKarts`, `bounds` y `projBounds` (sección 3.4). Verificar: regresión 8.4 completa, idéntica.
 - [ ] **T04 Layout sin DOM:** `layout.js` (`centerX`, `halfW`, `biomeAt`, `generateChunk` con pasillo libre, por ahora solo obstáculos estáticos de la granja) y `scripts/runner-smoke.mjs` con las pruebas 1 y 2. Verificar: el script pasa.
 - [ ] **T05 Mundo y textura circular:** `world.js` (anillo 2048², `ensure`, pintado de trozos, tema `granja`, cielo y paredes) y cambios en `Renderer` (rama `ring`, `applyBiomeFor`, `visibleDecor`). Verificar: en el navegador se ve el campo infinito avanzando con un kart `cpu`, sin cortes, a 60 fps.
@@ -34,3 +34,4 @@
 ## Notas por vuelta
 
 - **T01:** Se vinculó el repositorio con `origin/main` en `6cc281b`, se creó la rama `modo-supervivencia-estelar`, se copió `PLAN.md` y se creó `PROGRESO.md`. Verificado con `npm install` y `npm run build` sin errores.
+- **T02:** Se creó `game/runner/config.js` con constantes de balance, velocidades, frecuencias y los 8 biomas. Se añadió `RUNNER_KARTS = 6` y el modo `supervivencia` («Supervivencia Estelar») a `MODES` en `game/constants.js` (oculta Pista/Historia y mantiene Rivales en TV y celular). Verificado con `node` y `npm run build`.
