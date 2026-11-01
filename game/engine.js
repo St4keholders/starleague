@@ -1,6 +1,8 @@
 // Motor del anfitrión (pantalla del PC/TV)
-import { VILLAIN, CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, CUP_POINTS, TRACK_NAMES, MODES, DIFFICULTIES } from './constants.js';
+import { VILLAIN, CHARACTERS, MAX_PLAYERS, PEER_PREFIX, RACE_KARTS, BATTLE_KARTS, RUNNER_KARTS, CUP_POINTS, TRACK_NAMES, MODES, DIFFICULTIES } from './constants.js';
 import { Sim } from './sim.js';
+import { RunnerSim } from './runner/sim.js';
+import { RunnerWorld } from './runner/world.js';
 import { Renderer, drawCinemaFx } from './render.js';
 import { buildTrack, THEMES } from './trackgfx.js';
 import { Audio, MENU_SONG, STORY_SONG, VILLAIN_SONG, ZORG_SONG } from './audio.js';
@@ -425,6 +427,14 @@ export class GameHost {
   }
 
   startDemo() {
+    if (this.cfg.mode === 'supervivencia') {
+      const seed = 2026;
+      const w = new RunnerWorld(seed, 1);
+      this.demo = new RunnerSim({ world: w, seed, humans: [], difficulty: 1, demo: true });
+      this.demo.countdown = 0; this.demo.started = true; this.demo.demo = true;
+      this.renderer.setTrack(w);
+      return;
+    }
     const idx = this.cfg.mode === 'batalla' ? 'arena' : this.cfg.mode === 'rapida' ? this.cfg.track : this.cfg.mode === 'historia' ? (this.storyLevels(this.cfg.story)[this.cfg.level || 0] || this.storyLevels(this.cfg.story)[0]).track : 0;
     const t = this.getTrack(idx);
     this.demo = new Sim({ track: t, mode: idx === 'arena' ? 'battle' : 'race', humans: [], difficulty: 2, kartsTotal: idx === 'arena' ? 6 : 8, demo: true });
@@ -531,21 +541,43 @@ export class GameHost {
     this.advanceStory();
   }
 
-  startRace() {
+  startRace(customSeed = null) {
     const mode = this.cfg.mode;
+    const runner = mode === 'supervivencia';
     const battle = mode === 'batalla';
     const lvl = this.storyLevel();
-    const idx = lvl ? lvl.track : battle ? 'arena' : mode === 'copa' ? this.cup.races[this.cup.current] : this.cfg.track;
-    const track = this.getTrack(idx);
     this.players.forEach((p) => { if (p) p.late = false; });
     const humans = this.activePlayers().map((p) => ({ slot: p.slot, char: p.char }));
+    this.cinema = null;
+    this.storyResult = null;
+
+    if (runner && !lvl) {
+      const seed = customSeed !== null ? customSeed : ((Date.now() & 0x7fffffff) || 12345);
+      const world = new RunnerWorld(seed, this.cfg.diff);
+      this.sim = new RunnerSim({ world, seed, humans, difficulty: this.cfg.diff });
+      this.renderer.setTrack(world);
+      this.phase = 'race';
+      this.paused = false;
+      this.results = null;
+      this.pend = {};
+      const song = THEMES[world.theme] ? THEMES[world.theme].music : 0;
+      this.audio.playSong(song);
+      this.broadcast((i) => this.phaseMsg(i));
+      this.raceInit = raceInitMsg(this.sim, 'runner');
+      this.raceInit.song = song;
+      this.sfxOut = [];
+      this.broadcast(this.raceInit);
+      this.changed();
+      return;
+    }
+
+    const idx = lvl ? lvl.track : battle ? 'arena' : mode === 'copa' ? this.cup.races[this.cup.current] : this.cfg.track;
+    const track = this.getTrack(idx);
     const story = lvl ? {
       type: lvl.type, boss: this.resolveChar(lvl.boss), bossSkin: lvl.bossSkin, ally: lvl.ally || null, rivalSkin: lvl.rivalSkin || null,
       maxAhead: lvl.maxAhead, goal: lvl.goal || 0, hits: lvl.hits || 0, target: lvl.target || 3, obj: lvl.obj,
       time: lvl.type === 'time' ? (TIME_LIMITS[this.cfg.diff] || TIME_LIMITS[1]) : 0,
     } : null;
-    this.cinema = null;
-    this.storyResult = null;
     this.sim = new Sim({
       track, mode: battle && !lvl ? 'battle' : 'race', humans, difficulty: this.cfg.diff,
       kartsTotal: battle && !lvl ? BATTLE_KARTS : RACE_KARTS, botChars: this.cup ? this.cup.bots : null,
@@ -689,6 +721,9 @@ export class GameHost {
         }
       }
       if (this.sim) {
+        if (this.sim.runner && this.sim.world && this.sim.world.ensure) {
+          this.sim.world.ensure(this.sim.chaserY - 300, this.sim.leaderY + 1700, 2);
+        }
         const lk = this.localKart();
         // sin pantalla principal: este dispositivo muestra solo a su jugador (los demás se ven en sus celulares)
         const views = lk ? [lk] : this.sim.karts.filter((k) => k.human).sort((a, b) => a.slot - b.slot);
@@ -726,6 +761,9 @@ export class GameHost {
       let n = 0;
       while (this.acc >= STEP && n < 6) { this.demo.step(STEP); this.demo.events.length = 0; this.acc -= STEP; n++; }
       if (n >= 6) this.acc = 0;
+      if (this.demo.runner && this.demo.world && this.demo.world.ensure) {
+        this.demo.world.ensure(this.demo.chaserY - 300, this.demo.leaderY + 1700, 2);
+      }
       // cámara: seguir al líder del demo
       const lead = this.demo.karts.reduce((a, b) => (a.place < b.place ? a : b));
       this.renderer.render(this.demo, [lead], { demo: true });

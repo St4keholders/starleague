@@ -18,8 +18,8 @@ export const SPEED_END = 1.35;
 export const SPEED_RAMP_TIME = 180;
 
 // Perseguidor
-export const CHASE_V0 = 190;
-export const CHASE_ACC = 1.0;
+export const CHASE_V0 = 168;
+export const CHASE_ACC = 0.92;
 export const MAXGAP_START = 1100;
 export const MAXGAP_END = 350;
 export const MAXGAP_RAMP_TIME = 180;

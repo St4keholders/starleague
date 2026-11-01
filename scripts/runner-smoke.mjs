@@ -2,6 +2,7 @@
 // Importa SOLO módulos sin DOM. Si algo toca document o window, falla.
 
 import { generateChunk, verifyFreeCorridor } from '../game/runner/layout.js';
+import { RunnerSim } from '../game/runner/sim.js';
 import { MIN_CORRIDOR_W } from '../game/runner/config.js';
 
 function assert(cond, msg) {
@@ -21,7 +22,6 @@ for (let k = 0; k <= 200; k++) {
   const b = JSON.stringify(generateChunk(123, k, 1));
   assert(a === b, `No determinista en trozo k=${k}`);
 }
-// Los primeros 3 trozos no deben tener obstáculos
 for (let k = 0; k < 3; k++) {
   const c = generateChunk(123, k, 1);
   assert(c.obstacles.length === 0, `El trozo de salida k=${k} tiene obstáculos`);
@@ -33,11 +33,65 @@ console.log('2) Verificando pasillo libre >= 90 u (5 semillas × trozos 3..300).
 const SEEDS = [101, 2026, 7777, 424242, 987654];
 for (const seed of SEEDS) {
   for (let k = 3; k <= 300; k++) {
-    const chunk = generateChunk(seed, k, 2); // probamos incluso con densidad alta
+    const chunk = generateChunk(seed, k, 2);
     const ok = verifyFreeCorridor(seed, chunk, MIN_CORRIDOR_W);
     assert(ok, `Sin pasillo libre >= ${MIN_CORRIDOR_W} u en seed=${seed}, chunk=${k}`);
   }
 }
 console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
 
-console.log('✅ runner-smoke pasó correctamente.');
+// 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades
+console.log('3) Simulando partidas automáticas (10 semillas × 3 dificultades)...');
+const MATCH_SEEDS = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];
+const DIFF_NAMES = ['Fácil', 'Normal', 'Difícil'];
+const durationsByDiff = [[], [], []];
+
+for (let diff = 0; diff <= 2; diff++) {
+  for (const seed of MATCH_SEEDS) {
+    const sim = new RunnerSim({ seed, humans: [], difficulty: diff });
+    const dt = 1 / 60;
+    const maxTime = 400;
+    const windowCheck = new Map();
+    for (const k of sim.karts) windowCheck.set(k.id, { t: 0, y: k.y });
+
+    while (!sim.done && sim.raceTime < maxTime) {
+      sim.step(dt);
+      sim.events.length = 0;
+      if (sim.started && sim.endTimer < 0) {
+        for (const k of sim.karts) {
+          if (k.eliminated) continue;
+          const w = windowCheck.get(k.id);
+          if (sim.raceTime - w.t >= 3.0) {
+            const dy = k.y - w.y;
+            assert(
+              dy >= 100,
+              `Bot ${k.char} atascado en seed=${seed} diff=${diff} t=${sim.raceTime.toFixed(1)}s (avanzó ${dy.toFixed(1)}u en 3s)`
+            );
+            w.t = sim.raceTime;
+            w.y = k.y;
+          }
+        }
+      }
+    }
+
+    assert(sim.done, `La partida no terminó antes de ${maxTime}s (seed=${seed}, diff=${diff})`);
+    assert(sim.raceTime <= 360, `La partida duró más de 360s: ${sim.raceTime.toFixed(1)}s (seed=${seed}, diff=${diff})`);
+    const res = sim.results();
+    durationsByDiff[diff].push(sim.raceTime);
+    const reasons = res.slice(1).map((r) => `${r.char}:${r.reason}`).join(', ');
+    console.log(
+      `   [${DIFF_NAMES[diff]} | seed=${seed}] dur=${sim.raceTime.toFixed(1)}s | ganador=${res[0].char} (${res[0].distance}m) | elim=[${reasons}]`
+    );
+  }
+}
+
+const normalSorted = [...durationsByDiff[1]].sort((a, b) => a - b);
+const mid = normalSorted.length / 2;
+const medianNormal = (normalSorted[mid - 1] + normalSorted[mid]) / 2;
+console.log(`   Mediana en Normal: ${medianNormal.toFixed(1)}s (objetivo: 120..240s)`);
+assert(
+  medianNormal >= 120 && medianNormal <= 240,
+  `Mediana en Normal fuera de [120, 240]s: ${medianNormal.toFixed(1)}s`
+);
+
+console.log('✅ runner-smoke pasó todas las pruebas (1, 2, 3 y 4).');

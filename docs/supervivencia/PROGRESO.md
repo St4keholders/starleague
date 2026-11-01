@@ -7,7 +7,7 @@
 - [x] **T03 Refactor seguro de `Sim`:** métodos `placeKarts`, `bounds` y `projBounds` (sección 3.4). Verificar: regresión 8.4 completa, idéntica.
 - [x] **T04 Layout sin DOM:** `layout.js` (`centerX`, `halfW`, `biomeAt`, `generateChunk` con pasillo libre, por ahora solo obstáculos estáticos de la granja) y `scripts/runner-smoke.mjs` con las pruebas 1 y 2. Verificar: el script pasa.
 - [x] **T05 Mundo y textura circular:** `world.js` (anillo 2048², `ensure`, pintado de trozos, tema `granja`, cielo y paredes) y cambios en `Renderer` (rama `ring`, `applyBiomeFor`, `visibleDecor`). Verificar: en el navegador se ve el campo infinito avanzando con un kart `cpu`, sin cortes, a 60 fps.
-- [ ] **T06 `RunnerSim` básico:** salida, aceleración con `speedFactor`, paredes laterales, perseguidor, eliminación por perseguidor, fin de partida, `results`, `rank`. Engine: `startRace` y `startDemo` del modo. Verificar: prueba 3 del smoke (con bots simples) y partida visible en el navegador hasta resultados.
+- [x] **T06 `RunnerSim` básico:** salida, aceleración con `speedFactor`, paredes laterales, perseguidor, eliminación por perseguidor, fin de partida, `results`, `rank`. Engine: `startRace` y `startDemo` del modo. Verificar: prueba 3 del smoke (con bots simples) y partida visible en el navegador hasta resultados.
 - [ ] **T07 Obstáculos de la granja y vidas:** sprites `barn`, `tractor`, `haybale`, `fence`, `pumpkin`, `silo`, `windmill2`; choques, corazones, invulnerabilidad, escudo; HUD de corazones y VIVOS. Verificar: choque visible, se pierden vidas, eliminación por vidas.
 - [ ] **T08 Recogibles y cajas:** corazón, escudo, turbos y filas de cajas; IDs estables; efectos `heart`. Verificar: se recogen y desaparecen; el corazón no pasa de 3.
 - [ ] **T09 Salto, rampas y techos:** acción `jump` (teclado y motor), rampas, `groundAt`, plataformas de granero con techo proyectado, puentes. Verificar: saltar cercas; con rampa subir a un techo, avanzar encima y caer al final; choque al entrar de lado.
@@ -27,7 +27,7 @@
 
 ## Decisiones tomadas
 
-*(Se registrarán aquí durante el desarrollo)*
+- **T06:** Se ajustó `CHASE_V0 = 168` y `CHASE_ACC = 0.92` en `game/runner/config.js` junto con un ligero efecto de rebufo de grupo en `RunnerSim.botSpeedMul` para compensar la diferencia de velocidad base entre personajes (252 a 282 u/s) y lograr una duración mediana en Normal de `143.0s` (objetivo: 120..240s).
 
 ---
 
@@ -38,3 +38,4 @@
 - **T03:** Se extrajeron `placeKarts()`, `bounds(k, dt)` y `projBounds(p)` en `Sim` (`game/sim.js`) sin alterar el comportamiento existente. Verificado con la regresión completa de la sección 8.4 (10 pistas, Batalla, Historia 1 L1 e Historia 2 L1) y `npm run build`.
 - **T04:** Se creó `game/runner/layout.js` libre de DOM con `centerX`, `halfW`, `biomeAt` y `generateChunk` (con garantía de pasillo libre ≥ 90 u y salida limpia en los 3 primeros trozos), y `scripts/runner-smoke.mjs` con las pruebas 1 (determinismo) y 2 (pasillo libre en 5 semillas × trozos 3..300). Verificado con `node scripts/runner-smoke.mjs` y `npm run build`.
 - **T05:** Se añadió el tema `granja` y se exportaron `makeSkyStrip`, `noiseTile` y `toU32` en `game/trackgfx.js`. Se implementó `RunnerWorld` en `game/runner/world.js` (anillo 2048², pintado directo en `Uint32Array`, dithering 4×4 entre biomas, `ensure`, `applyBiomeFor`, `visibleDecor`) y se integró en `Renderer` (`game/render.js`). Verificado con `runner-smoke` y `npm run build`.
+- **T06:** Se implementó `RunnerSim` (`game/runner/sim.js`) extendiendo `Sim` con parrilla de 6 karts, progresión de velocidad `speedFactor`, perseguidor `chaserY`, `maxGapAt`, fin de partida por último sobreviviente, `rank` y `results`. Se conectó el modo `supervivencia` en `game/engine.js` (`startDemo`, `startRace`, `loop`) y se añadieron las pruebas 3 y 4 a `scripts/runner-smoke.mjs`. Verificado con `node scripts/runner-smoke.mjs` (mediana Normal 143.0s, 0 atascados) y `npm run build`.
