@@ -83,7 +83,7 @@ const FARM_OBSTACLES = [
   { kind: 'pumpkin', r: 10, height: 14, solid: true, jumpable: true, weight: 28 },
   { kind: 'fence', w: 76, h: 14, r: 38, height: 18, solid: true, jumpable: true, weight: 22 },
   { kind: 'tractor', r: 28, height: 45, solid: true, jumpable: false, weight: 10 },
-  { kind: 'barn', w: 110, h: 90, r: 55, height: 60, solid: true, jumpable: false, weight: 5 },
+  { kind: 'barn', w: 110, h: 100, r: 55, height: 60, solid: true, jumpable: false, weight: 6 },
   { kind: 'silo', r: 30, height: 65, solid: true, jumpable: false, weight: 5 },
 ];
 
@@ -183,7 +183,9 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
 
     for (let i = 0; i < baseCount; i++) {
       const tpl = pickWeighted(rng, FARM_OBSTACLES);
-      const y = y0 + 24 + rng() * (CHUNK_LEN - 48);
+      const y = tpl.kind === 'barn'
+        ? y0 + 128 + rng() * 10
+        : y0 + 24 + rng() * (CHUNK_LEN - 48);
       const cxy = centerX(seed, y);
       const hwy = halfW(seed, y);
       const halfExt = tpl.w ? tpl.w * 0.5 : tpl.r;
@@ -214,11 +216,56 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
         if (tpl.kind === 'pumpkin') {
           obs.lit = rng() < 0.25;
         }
+        if (tpl.kind === 'barn') {
+          const rx0 = Math.round((obs.x - obs.w * 0.5) * 10) / 10;
+          const rx1 = Math.round((obs.x + obs.w * 0.5) * 10) / 10;
+          const ry0 = Math.round((obs.y - obs.h * 0.5) * 10) / 10;
+          const ry1 = Math.round((obs.y + obs.h * 0.5) * 10) / 10;
+          platforms.push({
+            id: mkId('pl'),
+            obsId: obs.id,
+            kind: 'barn_roof',
+            x0: rx0,
+            x1: rx1,
+            y0: ry0,
+            y1: ry1,
+            h: obs.height || 60,
+          });
+          // Rampa de acceso frente al granero para subir al techo
+          const rampY0 = Math.max(y0 + 4, Math.round((ry0 - 72) * 10) / 10);
+          const rampY1 = Math.max(rampY0 + 36, Math.round((ry0 - 24) * 10) / 10);
+          zones.push({
+            id: mkId('z'),
+            type: 'ramp',
+            x0: Math.round((obs.x - 36) * 10) / 10,
+            x1: Math.round((obs.x + 36) * 10) / 10,
+            y0: rampY0,
+            y1: rampY1,
+          });
+        }
         obstacles.push(obs);
         placed = true;
         break;
       }
       void placed;
+    }
+
+    // Rampas de salto adicionales (~1 cada 5 trozos)
+    if (rng() < 0.22) {
+      const ry = Math.round((y0 + 30 + rng() * (CHUNK_LEN - 90)) * 10) / 10;
+      const cxy = centerX(seed, ry);
+      const hwy = halfW(seed, ry);
+      const rx = Math.round((cxy + (rng() * 2 - 1) * (hwy - 70)) * 10) / 10;
+      if (!overlapsExisting(rx, ry + 26, 32, obstacles, 8)) {
+        zones.push({
+          id: mkId('z'),
+          type: 'ramp',
+          x0: Math.round((rx - 28) * 10) / 10,
+          x1: Math.round((rx + 28) * 10) / 10,
+          y0: ry,
+          y1: Math.round((ry + 52) * 10) / 10,
+        });
+      }
     }
 
     // Franja de turbo en el piso (~1 cada BOOST_SPACING = 900 u)

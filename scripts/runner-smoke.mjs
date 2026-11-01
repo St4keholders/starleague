@@ -101,6 +101,70 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   assert(k.rouletteT > 0 && sim.taken.has(boxPk.id), 'La caja debe iniciar ruleta y desaparecer');
 }
 
+// 2.7 Verificar salto sobre cercas, rampa hacia techo de granero, avance sobre techo, caída y choque lateral
+{
+  const sim = new RunnerSim({ seed: 789, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
+  sim.started = true;
+  const k = sim.karts[0];
+
+  // a) Saltar una cerca
+  let fence = null;
+  for (let ci = 3; ci < 60; ci++) {
+    fence = sim.world.getChunk(ci).obstacles.find((o) => o.kind === 'fence');
+    if (fence) break;
+  }
+  assert(fence, 'Debe generarse al menos una cerca (fence)');
+  k.hearts = 3; k.invulnT = 0; k.jumpCd = 0;
+  k.x = fence.x; k.y = fence.y - 28; k.z = 0; k.vz = 0;
+  k.a = Math.PI / 2; k.v = 240; k.vx = 0; k.vy = 240;
+  k.input = { steer: 0, acc: true, brake: false, drift: false, item: false, power: false, jump: true };
+  sim.updateKart(k, 1 / 60);
+  assert(k.vz === 240 - 780 * (1 / 60) || k.z > 0, 'La acción jump debe impulsar vz hacia arriba');
+  k.input.jump = false;
+  for (let s = 0; s < 25; s++) sim.updateKart(k, 1 / 60);
+  assert(k.y > fence.y + 10 && k.hearts === 3, 'El kart debe saltar por encima de la cerca sin perder corazones');
+
+  // b) Con rampa subir a un techo de granero, avanzar encima y caer al final
+  let barnChunk = null, barnPl = null, barnRamp = null;
+  for (let ci = 3; ci < 120; ci++) {
+    const ch = sim.world.getChunk(ci);
+    if (ch.platforms && ch.platforms.length > 0) {
+      barnChunk = ch;
+      barnPl = ch.platforms[0];
+      barnRamp = ch.zones.find((z) => z.type === 'ramp');
+      if (barnPl && barnRamp) break;
+    }
+  }
+  assert(barnChunk && barnPl && barnRamp, 'Debe generarse un granero con plataforma y rampa frontal');
+  const midX = (barnPl.x0 + barnPl.x1) * 0.5;
+  k.hearts = 3; k.invulnT = 0; k.jumpCd = 0; k.spinT = 0;
+  k.x = midX; k.y = barnRamp.y0 + 2; k.z = 0; k.vz = 0;
+  k.a = Math.PI / 2; k.v = 250; k.vx = 0; k.vy = 250;
+  k.input = { steer: 0, acc: true, brake: false, drift: false, item: false, power: false, jump: false };
+
+  let onRoof = false;
+  let fellAfter = false;
+  for (let s = 0; s < 90; s++) {
+    k.x = midX; k.a = Math.PI / 2;
+    sim.updateKart(k, 1 / 60);
+    if (k.y >= barnPl.y0 + 10 && k.y <= barnPl.y1 - 10 && k.z >= barnPl.h) {
+      onRoof = true;
+    }
+    if (onRoof && k.y > barnPl.y1 + 15 && k.z < barnPl.h) {
+      fellAfter = true;
+      break;
+    }
+  }
+  assert(onRoof && k.hearts === 3, 'El kart debe subir al techo del granero con la rampa sin chocar');
+  assert(fellAfter, 'El kart debe caer al salir del borde final del techo');
+
+  // c) Choque al entrar de lado con z < h - 8
+  k.hearts = 3; k.invulnT = 0; k.spinT = 0;
+  k.x = midX; k.y = (barnPl.y0 + barnPl.y1) * 0.5; k.z = 0; k._prevZ = 0; k.vz = 0; k.v = 200;
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 2, 'Entrar al granero con z < h - 8 debe producir un choque (-1 corazón)');
+}
+
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades
 console.log('3) Simulando partidas automáticas (10 semillas × 3 dificultades)...');
 const MATCH_SEEDS = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];

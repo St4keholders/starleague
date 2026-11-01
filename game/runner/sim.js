@@ -14,6 +14,11 @@ import {
   SHIELD_DURATION,
   BOOST_PAD_DURATION,
   HEART_FULL_BOOST,
+  JUMP_VZ,
+  JUMP_COOLDOWN,
+  RAMP_VZ,
+  RAMP_V_FACTOR,
+  RAMP_BOOST,
   speedFactor,
   maxGapAt,
   chaserSpeed,
@@ -223,7 +228,7 @@ export class RunnerSim extends Sim {
     k.driftLevel = 0;
     k.boostT = 0;
     if (bounceBack) {
-      k.v = -Math.abs(k.v) * 0.3;
+      k.v = -Math.min(60, Math.abs(k.v) * 0.3);
       k.vx = Math.cos(k.a) * k.v;
       k.vy = Math.sin(k.a) * k.v;
       k.spinT = CRASH_SPIN_DURATION;
@@ -237,6 +242,52 @@ export class RunnerSim extends Sim {
       this.eliminateKart(k, reason);
     } else {
       this.say(k, `♥ ${k.hearts}`, 1.0);
+    }
+  }
+
+  groundAt(x, y, prevZ = 0) {
+    const ci = Math.floor(y / CHUNK_LEN);
+    let maxH = 0;
+    for (let cIdx = Math.max(0, ci - 1); cIdx <= ci + 1; cIdx++) {
+      const ch = this.world.getChunk(cIdx);
+      if (!ch.platforms) continue;
+      for (const pl of ch.platforms) {
+        if (x >= pl.x0 && x <= pl.x1 && y >= pl.y0 && y <= pl.y1) {
+          if (prevZ >= pl.h - 6 && pl.h > maxH) {
+            maxH = pl.h;
+          }
+        }
+      }
+    }
+    return maxH;
+  }
+
+  updateKart(k, dt) {
+    k._prevZ = k.z;
+    const wasSpin = k.spinT > 0;
+    const gH = this.groundAt(k.x, k.y, k.z);
+    if (
+      !k.eliminated &&
+      k.fallT <= 0 &&
+      k.spinT <= 0 &&
+      k.frozenT <= 0 &&
+      k.input &&
+      k.input.jump &&
+      k.z <= gH + 0.5 &&
+      (k.jumpCd || 0) <= 0
+    ) {
+      k.vz = JUMP_VZ;
+      k.jumpCd = JUMP_COOLDOWN;
+      this.sfx('jump');
+      this.buzz(k, 20);
+    }
+    super.updateKart(k, dt);
+    if (!k.eliminated && k.fallT <= 0 && k.frozenT <= 0) {
+      if (wasSpin && k.spinT <= 0 && k.v < 70) {
+        k.v = 70;
+      } else if (k.spinT <= 0 && k.v < k.maxV * 0.7 && (k.human ? !(k.input && k.input.brake) : true)) {
+        k.v = Math.min(k.maxV, k.v + k.accel * 0.7 * dt);
+      }
     }
   }
 
@@ -274,6 +325,14 @@ export class RunnerSim extends Sim {
 
     k.surface = 'road';
 
+    // Suelo elevado (techos de granero y plataformas)
+    const prevZ = k._prevZ ?? k.z;
+    const gH = this.groundAt(k.x, k.y, Math.max(prevZ, k.z));
+    if (gH > 0 && k.z <= gH && k.vz <= 0) {
+      k.z = gH;
+      k.vz = 0;
+    }
+
     const ci = Math.floor(k.y / CHUNK_LEN);
 
     // Zonas y recogibles en los trozos cercanos
@@ -281,13 +340,22 @@ export class RunnerSim extends Sim {
       const ch = this.world.getChunk(cIdx);
       if (ch.zones) {
         for (const z of ch.zones) {
-          if (z.type === 'boost' && k.z <= 4) {
+          if (z.type === 'boost' && k.z <= gH + 4) {
             if (k.x >= z.x0 && k.x <= z.x1 && k.y >= z.y0 && k.y <= z.y1) {
               const prev = k.boostT;
               k.boostT = Math.max(k.boostT, BOOST_PAD_DURATION);
               if (prev < 0.7) {
                 this.sfx('boost');
                 this.buzz(k, 40);
+              }
+            }
+          } else if (z.type === 'ramp' && k.z <= gH + 4) {
+            if (k.x >= z.x0 && k.x <= z.x1 && k.y >= z.y0 && k.y <= z.y1) {
+              if (k.vz < 120) {
+                k.vz = RAMP_VZ + Math.max(0, k.v) * RAMP_V_FACTOR;
+                k.boostT = Math.max(k.boostT, RAMP_BOOST);
+                this.sfx('jump');
+                this.buzz(k, 35);
               }
             }
           }
@@ -311,7 +379,9 @@ export class RunnerSim extends Sim {
         const ch = this.world.getChunk(cIdx);
         for (const o of ch.obstacles) {
           if (!o.solid) continue;
-          if (k.z >= (o.height || 24)) continue;
+          const oh = o.height || 24;
+          // Si está en una plataforma por encima del obstáculo o saltando sobre él, no choca
+          if (k.z >= oh - 6) continue;
           if (o.w && o.h) {
             const hx = o.w * 0.5 + KART_R;
             const hy = o.h * 0.5 + KART_R;
@@ -403,10 +473,10 @@ export class RunnerSim extends Sim {
       const ci1 = Math.floor((k.y + 270) / CHUNK_LEN);
 
       for (let c = -3; c <= 3; c++) {
-        const candOff = (c / 3) * (hwLook * 0.82);
+        const candOff = (c / 3) * (hwLook * 0.84);
         let minClear = 999;
 
-        for (let s = 20; s <= 240; s += 20) {
+        for (let s = 18; s <= 240; s += 18) {
           const sy = k.y + s;
           const f = s / 240;
           const scx = centerX(this.seed, sy);
@@ -416,15 +486,21 @@ export class RunnerSim extends Sim {
             const ch = this.world.getChunk(ci);
             for (const o of ch.obstacles) {
               if (!o.solid) continue;
-              const rad = o.w ? Math.max(o.w, o.h) * 0.55 : o.r;
-              const d = Math.hypot(sx - o.x, sy - o.y) - rad;
+              let d;
+              if (o.w && o.h) {
+                const dx = Math.max(0, Math.abs(sx - o.x) - o.w * 0.5);
+                const dy = Math.max(0, Math.abs(sy - o.y) - o.h * 0.5);
+                d = Math.hypot(dx, dy);
+              } else {
+                d = Math.hypot(sx - o.x, sy - o.y) - (o.r || 16);
+              }
               if (d < minClear) minClear = d;
             }
           }
         }
 
         const curOff = k.x - centerX(this.seed, k.y);
-        let score = minClear * 4 - Math.abs(candOff - curOff) * 0.15 - Math.abs(candOff) * 0.05;
+        let score = minClear * 5 - Math.abs(candOff - curOff) * 0.12 - Math.abs(candOff) * 0.04;
         if (score > bestScore) {
           bestScore = score;
           bestOff = candOff;
@@ -433,14 +509,32 @@ export class RunnerSim extends Sim {
       ai.targetOffset = bestOff;
     }
 
-    const lookAhead = 120;
+    // Saltar si hay un obstáculo saltable justo adelante a menos de 55 u
+    const ciNow = Math.max(0, Math.floor(k.y / CHUNK_LEN));
+    for (let ci = ciNow; ci <= ciNow + 1; ci++) {
+      const ch = this.world.getChunk(ci);
+      for (const o of ch.obstacles) {
+        if (!o.solid || !o.jumpable) continue;
+        const dy = o.y - k.y;
+        if (dy > 6 && dy < 55) {
+          const hx = (o.w ? o.w * 0.5 : o.r || 16) + KART_R + 4;
+          if (Math.abs(k.x - o.x) < hx) {
+            inp.jump = true;
+            break;
+          }
+        }
+      }
+      if (inp.jump) break;
+    }
+
+    const lookAhead = 110;
     const ty = k.y + lookAhead;
     const tx = centerX(this.seed, ty) + (ai.targetOffset || 0);
     const want = Math.atan2(ty - k.y, tx - k.x);
     const diff = wrapAngle(want - k.a);
-    inp.steer = Math.max(-1, Math.min(1, diff * 2.5));
+    inp.steer = Math.max(-1, Math.min(1, diff * 2.8)) * (k.v < 0 ? -1 : 1);
     inp.acc = true;
-    inp.brake = Math.abs(diff) > 1.15 && k.v > 140;
+    inp.brake = false;
   }
 
   rank() {

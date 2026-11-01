@@ -173,11 +173,17 @@ export class RunnerWorld {
       }
     }
 
-    // Pintar zonas (turbos en el piso, etc.)
+    // Pintar zonas (turbos en el piso, rampas, puentes, etc.)
     const boostBg = toU32('#ff4d2e');
     const boostChv = toU32('#ffe45c');
     const boostRim = toU32('#2ef0ff');
     const boostDark = toU32('#1e122a');
+    const rampA = toU32('#ff9a1e');
+    const rampB = toU32('#ffe45c');
+    const rampEdge = toU32('#c8341a');
+    const bridgeWoodA = toU32('#8a562a');
+    const bridgeWoodB = toU32('#6e421e');
+    const bridgeRail = toU32('#4a2a10');
     for (const z of chunk.zones) {
       if (z.type === 'boost') {
         const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
@@ -199,6 +205,43 @@ export class RunnerWorld {
               const chv = (ly + dx) % 9;
               tex[rowOff | uu] = chv < 4 ? boostChv : boostBg;
             }
+          }
+        }
+      } else if (z.type === 'ramp') {
+        const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
+        const u1 = Math.min(MAP_SIZE - 1, (z.x1 / TEX_SCALE) | 0);
+        const vr0 = (z.y0 / TEX_SCALE) | 0;
+        const vr1 = (z.y1 / TEX_SCALE) | 0;
+        const um = (u0 + u1) >> 1;
+        for (let vr = vr0; vr <= vr1; vr++) {
+          const vv = vr & 2047;
+          const rowOff = vv << 11;
+          const ly = vr - vr0;
+          for (let uu = u0; uu <= u1; uu++) {
+            if (uu === u0 || uu === u1 || vr === vr0) {
+              tex[rowOff | uu] = boostDark;
+            } else if (vr >= vr1 - 2) {
+              tex[rowOff | uu] = boostChv;
+            } else if (uu === u0 + 1 || uu === u1 - 1) {
+              tex[rowOff | uu] = rampEdge;
+            } else {
+              const dx = Math.abs(uu - um);
+              const chv = (ly - (dx >> 1) + 64) % 7;
+              tex[rowOff | uu] = chv < 3 ? rampB : rampA;
+            }
+          }
+        }
+      } else if (z.type === 'bridge') {
+        const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
+        const u1 = Math.min(MAP_SIZE - 1, (z.x1 / TEX_SCALE) | 0);
+        const vr0 = (z.y0 / TEX_SCALE) | 0;
+        const vr1 = (z.y1 / TEX_SCALE) | 0;
+        for (let vr = vr0; vr <= vr1; vr++) {
+          const vv = vr & 2047;
+          const rowOff = vv << 11;
+          const plank = (vr % 4) === 0 ? bridgeWoodB : bridgeWoodA;
+          for (let uu = u0; uu <= u1; uu++) {
+            tex[rowOff | uu] = (uu <= u0 + 1 || uu >= u1 - 1) ? bridgeRail : plank;
           }
         }
       }
@@ -272,6 +315,12 @@ export class RunnerWorld {
           if (pk.y < minY || pk.y > maxY) continue;
           if (taken && taken.has(pk.id)) continue;
           out.push(pk);
+        }
+      }
+      if (ch.platforms) {
+        for (const pl of ch.platforms) {
+          if (pl.y1 < minY || pl.y0 > maxY) continue;
+          out.push(pl);
         }
       }
     }

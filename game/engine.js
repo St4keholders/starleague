@@ -17,9 +17,9 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const STEP = 1 / 60;
 
 const KB = {
-  // el carro acelera solo: "join" solo sirve para unirse en el lobby
-  kbA: { left: ['KeyA'], right: ['KeyD'], join: ['KeyW'], brake: ['KeyS'], drift: ['Space'], item: ['KeyQ'], power: ['KeyE'] },
-  kbB: { left: ['ArrowLeft'], right: ['ArrowRight'], join: ['ArrowUp'], brake: ['ArrowDown'], drift: ['ShiftRight', 'Numpad0'], item: ['Slash', 'Numpad1', 'Minus'], power: ['Period', 'Numpad2'] },
+  // el carro acelera solo: "join" solo sirve para unirse en el lobby; en carrera W / ↑ saltan
+  kbA: { left: ['KeyA'], right: ['KeyD'], join: ['KeyW'], jump: ['KeyW'], brake: ['KeyS'], drift: ['Space'], item: ['KeyQ'], power: ['KeyE'] },
+  kbB: { left: ['ArrowLeft'], right: ['ArrowRight'], join: ['ArrowUp'], jump: ['ArrowUp'], brake: ['ArrowDown'], drift: ['ShiftRight', 'Numpad0'], item: ['Slash', 'Numpad1', 'Minus'], power: ['Period', 'Numpad2'] },
 };
 
 function randCode() {
@@ -284,10 +284,11 @@ export class GameHost {
     if (!p) return;
     switch (msg.t) {
       case 'in': {
-        const prev = this.phoneIn[slot] || { ic: msg.ic, pc: msg.pc };
+        const prev = this.phoneIn[slot] || { ic: msg.ic, pc: msg.pc, jc: msg.jc || 0 };
         const pd = this.pend[slot] || (this.pend[slot] = {});
         if (msg.ic > prev.ic) pd.item = true;
         if (msg.pc > prev.pc) pd.power = true;
+        if ((msg.jc || 0) > (prev.jc || 0)) pd.jump = true;
         this.phoneIn[slot] = msg;
         p.lastSeen = performance.now();
         break;
@@ -384,6 +385,7 @@ export class GameHost {
         const pd = this.pend[slot] || (this.pend[slot] = {});
         if (map.item.includes(code)) pd.item = true;
         if (map.power.includes(code)) pd.power = true;
+        if (map.jump && map.jump.includes(code)) pd.jump = true;
       }
       return;
     }
@@ -786,7 +788,7 @@ export class GameHost {
         k.autopilot = !p.connected || stale;
         base = m ? { steer: Math.max(-1, Math.min(1, Number(m.s) || 0)), acc: !!m.a, brake: !!m.b, drift: !!m.d } : { steer: 0, acc: false, brake: false, drift: false };
       } else base = this.kbInput(p.kind);
-      k.input = { ...base, acc: !base.brake, item: !!pd.item, power: !!pd.power };
+      k.input = { ...base, acc: !base.brake, item: !!pd.item, power: !!pd.power, jump: !!pd.jump };
       this.pend[k.slot] = {};
     }
   }
@@ -796,6 +798,7 @@ export class GameHost {
     for (const e of ev) {
       if (e.type === 'sfx') { this.audio.sfx(e.name); if (this.sfxOut.length < 12 && !this.sfxOut.includes(e.name)) this.sfxOut.push(e.name); }
       else if (e.type === 'buzz') this.send(e.slot, { t: 'buzz', ms: e.ms });
+      else if (e.type === 'biome' && THEMES[e.theme]) this.audio.playSong(THEMES[e.theme].music);
       else if (e.type === 'done') { this.sim.events.length = 0; this.endRace(); return; }
     }
     ev.length = 0;

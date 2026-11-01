@@ -231,10 +231,62 @@ export class Renderer {
         if (p) push(p, () => { this.shadow(p, c, d.x, d.y, 7); this.billboard(spec.c, p, spec.w); });
         continue;
       }
+      if (d.kind === 'barn_roof') {
+        const yNear = Math.max(c.y + 10, d.y0);
+        if (d.y1 <= yNear + 4) continue;
+        const p00 = this.proj(c, d.x0, yNear, d.h);
+        const p10 = this.proj(c, d.x1, yNear, d.h);
+        const p11 = this.proj(c, d.x1, d.y1, d.h);
+        const p01 = this.proj(c, d.x0, d.y1, d.h);
+        if (p00 && p10 && p11 && p01) {
+          const minF = Math.min(p00.f, p10.f, p11.f, p01.f);
+          list.push({
+            f: minF + 2,
+            p: p00,
+            draw: () => {
+              ctx.fillStyle = '#4a4e58';
+              ctx.beginPath();
+              ctx.moveTo(p00.sx, p00.sy);
+              ctx.lineTo(p10.sx, p10.sy);
+              ctx.lineTo(p11.sx, p11.sy);
+              ctx.lineTo(p01.sx, p01.sy);
+              ctx.closePath();
+              ctx.fill();
+              ctx.strokeStyle = '#f4f0e8';
+              ctx.lineWidth = Math.max(1, 2 * p00.s);
+              ctx.stroke();
+              // Líneas de tejas y cumbrera central
+              ctx.strokeStyle = '#383b44';
+              ctx.lineWidth = Math.max(1, 1.2 * p00.s);
+              for (let s = 1; s <= 3; s++) {
+                const t01 = s / 4;
+                const lx = p00.sx + (p01.sx - p00.sx) * t01;
+                const ly = p00.sy + (p01.sy - p00.sy) * t01;
+                const rx = p10.sx + (p11.sx - p10.sx) * t01;
+                const ry = p10.sy + (p11.sy - p10.sy) * t01;
+                ctx.beginPath();
+                ctx.moveTo(lx, ly);
+                ctx.lineTo(rx, ry);
+                ctx.stroke();
+              }
+              const mx0 = (p00.sx + p10.sx) * 0.5, my0 = (p00.sy + p10.sy) * 0.5;
+              const mx1 = (p01.sx + p11.sx) * 0.5, my1 = (p01.sy + p11.sy) * 0.5;
+              ctx.strokeStyle = '#686e7c';
+              ctx.beginPath();
+              ctx.moveTo(mx0, my0);
+              ctx.lineTo(mx1, my1);
+              ctx.stroke();
+            },
+          });
+        }
+        continue;
+      }
       const kind = d.kind === 'pumpkin' && d.lit ? 'pumpkin_lit' : d.kind;
       const spec = sp.decor[kind] || sp.decor[d.kind];
       if (!spec) continue;
-      const p = this.proj(c, d.x, d.y, spec.float || 0);
+      // Colocar la fachada del granero en el borde frontal (y0) para coincidir con el techo
+      const py = d.kind === 'barn' && d.h ? d.y - d.h * 0.45 : d.y;
+      const p = this.proj(c, d.x, py, spec.float || 0);
       if (p && p.f < CAM_DIST * 0.75) continue;
       push(p, () => this.billboard(spec.c, p, spec.w, d.kind === 'starcrystal' || d.kind === 'asteroid' ? Math.sin(time * 2 + d.x) * 4 * p.s : 0));
     }
@@ -357,10 +409,11 @@ export class Renderer {
     if (k.fallT > 0 && k.z < -20) return;
     // sombra
     if (k.fallT <= 0) {
-      const g = this.proj(c, k.x, k.y, 0);
+      const gH = sim.groundAt ? sim.groundAt(k.x, k.y, k.z) : 0;
+      const g = this.proj(c, k.x, k.y, gH);
       if (g) {
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        const rx = (12 - Math.min(6, k.z * 0.08)) * g.s;
+        const rx = (12 - Math.min(6, Math.max(0, k.z - gH) * 0.08)) * g.s;
         ctx.beginPath(); ctx.ellipse(g.sx, g.sy, rx, Math.max(1, rx * Math.min(0.5, (c.H / g.f) * 1.6)), 0, 0, Math.PI * 2); ctx.fill();
       }
     }

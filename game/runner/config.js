@@ -39,7 +39,7 @@ export const RAMP_V_FACTOR = 0.25;
 export const RAMP_BOOST = 0.45;
 export const SHIELD_DURATION = 8.0;
 export const INVULN_DURATION = 2.0;
-export const CRASH_SPIN_DURATION = 0.8;
+export const CRASH_SPIN_DURATION = 0.55;
 
 // Frecuencia de recogibles (en unidades de avance)
 export const HEART_EVERY = 2500;
