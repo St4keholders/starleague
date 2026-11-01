@@ -77,10 +77,14 @@ export class Sim {
       this.karts.forEach((k, i) => { k.id = i; });
     }
 
-    if (this.arena) this.placeArena(); else this.placeGrid();
+    this.placeKarts();
     this.setupTrackObjects();
     this.setupStory();
     this.rank();
+  }
+
+  placeKarts() {
+    if (this.arena) this.placeArena(); else this.placeGrid();
   }
 
   makeKart(charId, human, slot) {
@@ -325,8 +329,12 @@ export class Sim {
     if ((surf === 'off' || surf === 'goo') && Math.abs(k.v) > 60 && Math.random() < 0.35) this.dust(k);
 
     // límites del mundo
-    if (this.arena) this.arenaBounds(k); else this.trackBounds(k, dt);
+    this.bounds(k, dt);
     k.camA += wrapAngle(k.a - k.camA) * Math.min(1, dt * (k.drift ? 4.2 : 7));
+  }
+
+  bounds(k, dt) {
+    if (this.arena) this.arenaBounds(k); else this.trackBounds(k, dt);
   }
 
   trackBounds(k, dt) {
@@ -640,7 +648,6 @@ export class Sim {
   }
 
   updateProjectiles(dt) {
-    const t = this.track;
     for (let i = this.projs.length - 1; i >= 0; i--) {
       const p = this.projs[i];
       p.life -= dt; p.grace -= dt;
@@ -656,27 +663,7 @@ export class Sim {
         p.x += p.vx * dt; p.y += p.vy * dt;
       } else {
         p.x += p.vx * dt; p.y += p.vy * dt;
-        if (this.arena) {
-          const d = t.def;
-          if (p.x < d.min || p.x > d.max) { p.vx = -p.vx; p.x = Math.max(d.min, Math.min(d.max, p.x)); }
-          if (p.y < d.min || p.y > d.max) { p.vy = -p.vy; p.y = Math.max(d.min, Math.min(d.max, p.y)); }
-          for (const pl of d.pillars) {
-            const dx = p.x - pl.x, dy = p.y - pl.y, dd = Math.hypot(dx, dy);
-            if (dd < pl.r + p.r) { const ux = dx / dd, uy = dy / dd; const vn = p.vx * ux + p.vy * uy; p.vx -= 2 * vn * ux; p.vy -= 2 * vn * uy; p.x = pl.x + ux * (pl.r + p.r); p.y = pl.y + uy * (pl.r + p.r); }
-          }
-        } else {
-          const loc = locate(t.cl, p.x, p.y, p.idx);
-          p.idx = loc.idx;
-          const lim = t.w + t.ow - p.r;
-          if (Math.abs(loc.d) > lim) {
-            if (t.def.outside === 'wall') {
-              const j = Math.floor(p.idx) % t.cl.N, nx = -t.cl.ty[j], ny = t.cl.tx[j];
-              const vn = p.vx * nx + p.vy * ny;
-              if (vn * Math.sign(loc.d) > 0) { p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; }
-              p.x -= nx * Math.sign(loc.d) * (Math.abs(loc.d) - lim); p.y -= ny * Math.sign(loc.d) * (Math.abs(loc.d) - lim);
-            } else if (Math.abs(loc.d) > t.w + t.ow + 10) dead = true;
-          }
-        }
+        if (this.projBounds(p)) dead = true;
       }
       if (!dead) {
         for (const k of this.karts) {
@@ -692,6 +679,32 @@ export class Sim {
       }
       if (dead) this.projs.splice(i, 1);
     }
+  }
+
+  projBounds(p) {
+    const t = this.track;
+    if (this.arena) {
+      const d = t.def;
+      if (p.x < d.min || p.x > d.max) { p.vx = -p.vx; p.x = Math.max(d.min, Math.min(d.max, p.x)); }
+      if (p.y < d.min || p.y > d.max) { p.vy = -p.vy; p.y = Math.max(d.min, Math.min(d.max, p.y)); }
+      for (const pl of d.pillars) {
+        const dx = p.x - pl.x, dy = p.y - pl.y, dd = Math.hypot(dx, dy);
+        if (dd < pl.r + p.r) { const ux = dx / dd, uy = dy / dd; const vn = p.vx * ux + p.vy * uy; p.vx -= 2 * vn * ux; p.vy -= 2 * vn * uy; p.x = pl.x + ux * (pl.r + p.r); p.y = pl.y + uy * (pl.r + p.r); }
+      }
+      return false;
+    }
+    const loc = locate(t.cl, p.x, p.y, p.idx);
+    p.idx = loc.idx;
+    const lim = t.w + t.ow - p.r;
+    if (Math.abs(loc.d) > lim) {
+      if (t.def.outside === 'wall') {
+        const j = Math.floor(p.idx) % t.cl.N, nx = -t.cl.ty[j], ny = t.cl.tx[j];
+        const vn = p.vx * nx + p.vy * ny;
+        if (vn * Math.sign(loc.d) > 0) { p.vx -= 2 * vn * nx; p.vy -= 2 * vn * ny; }
+        p.x -= nx * Math.sign(loc.d) * (Math.abs(loc.d) - lim); p.y -= ny * Math.sign(loc.d) * (Math.abs(loc.d) - lim);
+      } else if (Math.abs(loc.d) > t.w + t.ow + 10) return true;
+    }
+    return false;
   }
 
   updatePuddles(dt) {
