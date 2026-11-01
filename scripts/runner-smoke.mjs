@@ -275,6 +275,28 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
       assert(gateChunk.decor.some((d) => d.kind === 'gate' && d.biomeName === BIOMES[bIdx].name), `El bioma ${BIOMES[bIdx].name} debe tener arco gate al inicio`);
     }
   }
+
+  // Prueba de objetos y poderes en el modo (T15): 8 personajes + baron, kartAhead, projBounds y sin pérdida de corazones
+  const charsToTest = ['pipo', 'rocco', 'lumi', 'bruno', 'nimbo', 'chispa', 'tito', 'gelida', 'baron'];
+  for (const chId of charsToTest) {
+    const pSim = new RunnerSim({ seed: 12345, humans: [{ slot: 0, char: chId }], difficulty: 1 });
+    pSim.started = true;
+    pSim.countdown = 0;
+    const pk = pSim.karts[0];
+    // Colocar otro kart justo adelante para probar kartAhead, destello, rayo y panal
+    const other = pSim.karts[1];
+    pk.y = 320;
+    other.y = 400;
+    other.hearts = 3;
+    other.invulnT = 0;
+    other.shieldT = 0;
+    assert(pSim.kartAhead(pk) === other, `kartAhead debe devolver el kart con menor y > pk.y (${chId})`);
+    pk.power = 1;
+    pSim.usePower(pk);
+    assert(pk.power === 0, `El poder de ${chId} debe consumirse al activarse`);
+    for (let s = 0; s < 15; s++) pSim.step(1 / 60);
+    assert(other.hearts === 3, `El poder de ${chId} no debe quitar corazones`);
+  }
 }
 
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades

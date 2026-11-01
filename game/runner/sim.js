@@ -625,6 +625,64 @@ export class RunnerSim extends Sim {
     return best;
   }
 
+  useItem(k) {
+    if (!k.item || k.rouletteT > 0) return;
+    if (k.item === 'iman') {
+      k.item = null;
+      const t =
+        this.karts.find((o) => o !== k && !o.eliminated && o.y > k.y && o.item) ||
+        this.karts.find((o) => o !== k && !o.eliminated && o.item);
+      if (t) {
+        k.item = t.item;
+        t.item = null;
+        this.say(k, '¡ROBADO!', 1);
+        this.say(t, '¡TE ROBARON!', 1.2);
+        this.buzz(t, 120);
+      } else {
+        k.item = 'chile';
+      }
+      this.sfx('magnet');
+      return;
+    }
+    super.useItem(k);
+  }
+
+  usePower(k) {
+    if (k.charges > 0) {
+      super.usePower(k);
+      return;
+    }
+    if (k.power < 1 || k.eliminated) return;
+    const p = k.ch.power;
+    if (p === 'destello') {
+      k.power = 0;
+      this.emit({ type: 'power', kart: k.id, power: p });
+      this.sfx('flash');
+      const targets = this.karts.filter((o) => o !== k && !o.eliminated && o.y > k.y);
+      for (const o of targets) {
+        if (o.shieldT > 0) continue;
+        o.blindT = 2.3;
+        o.flashT = 2.3;
+        this.buzz(o, 100);
+      }
+      this.say(k, '¡DESTELLO!', 0.8);
+      return;
+    }
+    if (p === 'rayo') {
+      k.power = 0;
+      this.emit({ type: 'power', kart: k.id, power: p });
+      const aliveByY = this.karts.filter((o) => !o.eliminated).sort((a, b) => b.y - a.y);
+      const t = aliveByY[0] === k ? aliveByY[1] : aliveByY[0];
+      if (t && t !== k) {
+        this.effects.push({ type: 'bolt', x: t.x, y: t.y, t: 0.5, max: 0.5, kart: t.id });
+        this.hit(t, 'shock', k);
+      }
+      this.sfx('thunder');
+      return;
+    }
+    super.usePower(k);
+  }
+
   projBounds(p) {
     const cx = centerX(this.seed, p.y);
     const hw = halfW(this.seed, p.y);
