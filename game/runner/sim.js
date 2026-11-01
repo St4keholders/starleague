@@ -21,6 +21,11 @@ import {
   RAMP_BOOST,
   DIFF_BOT_THINK_DT,
   DIFF_BOT_ERROR,
+  STEER_TILT,
+  STEER_RESPONSE,
+  LAT_SPEED,
+  FIELD_CX,
+  FIELD_HW,
   speedFactor,
   maxGapAt,
   chaserSpeed,
@@ -28,6 +33,7 @@ import {
 import { centerX, centerSlope, halfW, biomeAt, generateChunk, isHazardAt, obstacleStateAt } from './layout.js';
 
 const KART_R = 9;
+const FWD = Math.PI / 2; // adelante (+Y)
 
 function makeHeadlessWorld(seed, difficulty) {
   const chunks = new Map();
@@ -145,7 +151,7 @@ export class RunnerSim extends Sim {
   }
 
   botSpeedMul(k) {
-    let m = [0.97, 1.0, 1.02][this.diff] || 1.0;
+    let m = [0.93, 0.96, 0.99][this.diff] || 0.96;
     // Rebufo de grupo para mantener la carrera compacta y evitar muertes prematuras por MAXGAP
     const gap = this.leaderY - k.y;
     if (gap > 120) {
@@ -160,7 +166,10 @@ export class RunnerSim extends Sim {
     if (this.started) {
       const sf = speedFactor(this.raceTime);
       for (const k of this.karts) {
-        k.maxV = k.baseMaxV * sf;
+        // los humanos también tienen un poco de «rebufo» si se quedan atrás del líder (los bots ya lo tienen)
+        const gap = this.leaderY - k.y;
+        const catchUp = k.human && gap > 80 ? Math.min(1.2, 1 + (gap - 80) / 1500) : 1;
+        k.maxV = k.baseMaxV * sf * catchUp;
         if (k.jumpCd > 0) k.jumpCd = Math.max(0, k.jumpCd - dt);
         if (k.crashT > 0) k.crashT = Math.max(0, k.crashT - dt);
       }
@@ -275,8 +284,9 @@ export class RunnerSim extends Sim {
     k.driftLevel = 0;
     k.boostT = 0;
     if (bounceBack) {
-      k.v = -Math.min(60, Math.abs(k.v) * 0.3);
-      k.vx = Math.cos(k.a) * k.v;
+      // choque: frena fuerte pero NO lo manda hacia atrás (si no, el perseguidor lo alcanza siempre)
+      k.v = Math.max(90, Math.abs(k.v) * 0.55);
+      k.vx *= 0.3;
       k.vy = Math.sin(k.a) * k.v;
       k.spinT = CRASH_SPIN_DURATION;
       k.crashT = CRASH_SPIN_DURATION;
@@ -354,6 +364,7 @@ export class RunnerSim extends Sim {
     }
     if (k.invulnT > 0) return;
 
+    k.lastHit = hz;
     k.respawnY = k.y;
     k.respawnX = this.findSafeX(k.x, k.y);
     this.damageKart(k, 'vidas', false);
@@ -381,6 +392,36 @@ export class RunnerSim extends Sim {
   }
 
   updateKart(k, dt) {
+    // Conducción guiada: el kart siempre mira hacia adelante; girar solo lo inclina hacia un lado.
+    // El derrape no existe en este modo y el giro libre se apaga (steer 0 para la física base).
+    const rawIn = k.input || {};
+    const steer = Math.max(-1, Math.min(1, Number(rawIn.steer) || 0));
+    // el botón de derrape (Espacio / Shift) también salta en este modo
+    const driftEdge = !!rawIn.drift && !k._driftHeld;
+    k._driftHeld = !!rawIn.drift;
+    k.input = { ...rawIn, steer: 0, drift: false, jump: !!rawIn.jump || driftEdge };
+    k.drift = 0;
+    // La física base avanza siempre recto (a = adelante), así girar NO quita velocidad hacia adelante.
+    k.a = FWD;
+    this.updateKartInner(k, dt);
+    // Movimiento lateral propio del modo: ◀▶ desplazan el kart de lado con una respuesta suave
+    const ctrl = !k.eliminated && k.fallT <= 0 && k.spinT <= 0 && k.frozenT <= 0;
+    const want = ctrl ? -steer * (LAT_SPEED + Math.max(0, k.v) * 0.2) : 0; // steer +1 = derecha en pantalla = -X
+    const resp = k.z > 0.5 ? STEER_RESPONSE * 0.6 : STEER_RESPONSE;
+    k.lat = (k.lat || 0) + (want - (k.lat || 0)) * Math.min(1, dt * resp);
+    if (!k.eliminated && k.fallT <= 0) {
+      k.x += k.lat * dt;
+      const lim = FIELD_HW - KART_R;
+      if (k.x < FIELD_CX - lim) { k.x = FIELD_CX - lim; k.lat = Math.max(0, k.lat); }
+      if (k.x > FIELD_CX + lim) { k.x = FIELD_CX + lim; k.lat = Math.min(0, k.lat); }
+    }
+    // inclinación solo visual: el kart se ve girando hacia donde va
+    k.a = FWD - (k.lat / (LAT_SPEED + 60)) * STEER_TILT;
+    k.vx = k.lat;
+    k.camA = FWD;
+  }
+
+  updateKartInner(k, dt) {
     k._prevZ = k.z;
     const wasSpin = k.spinT > 0;
     const wasFrozen = k.frozenT > 0;
@@ -553,36 +594,28 @@ export class RunnerSim extends Sim {
 
     // Colisión con obstáculos de los trozos cercanos (solo si no está invulnerable)
     if (k.invulnT <= 0) {
-      for (let cIdx = Math.max(0, ci - 1); cIdx <= ci + 1; cIdx++) {
+      let hitO = null;
+      for (let cIdx = Math.max(0, ci - 1); cIdx <= ci + 1 && !hitO; cIdx++) {
         const ch = this.world.getChunk(cIdx);
         for (const o of ch.obstacles) {
           if (!o.solid) continue;
           const st = obstacleStateAt(o, this.raceTime || 0);
           if (!st.active) continue;
           const oh = o.height || 24;
-          // Si está en una plataforma por encima del obstáculo o saltando sobre él, no choca
+          // saltando por encima (o sobre un techo) no choca
           if (k.z >= oh - 6) continue;
-          if (o.w && o.h) {
-            const hx = o.w * 0.5 + KART_R;
-            const hy = o.h * 0.5 + KART_R;
-            const dx = k.x - st.x;
-            const dy = k.y - st.y;
-            if (Math.abs(dx) < hx && Math.abs(dy) < hy) {
-              this.damageKart(k, 'vidas', true);
-              break;
-            }
-          } else {
-            const dx = k.x - st.x;
-            const dy = k.y - st.y;
-            const d = Math.hypot(dx, dy);
-            const m = (o.r || 16) + KART_R;
-            if (d < m) {
-              this.damageKart(k, 'vidas', true);
-              break;
-            }
-          }
+          const dx = k.x - st.x;
+          const dy = k.y - st.y;
+          let hit;
+          if (o.w && o.h) hit = Math.abs(dx) < o.w * 0.5 + KART_R - 2 && Math.abs(dy) < o.h * 0.5 + KART_R - 2;
+          else hit = dx * dx + dy * dy < ((o.r || 16) + KART_R - 2) ** 2;
+          if (hit) { hitO = { o, st, dx }; break; }
         }
-        if (k.invulnT > 0) break;
+      }
+      if (hitO) {
+        // tras el choque queda invulnerable (parpadea) y atraviesa el obstáculo: no se queda pegado
+        k.lastHit = hitO.o.kind;
+        this.damageKart(k, 'vidas', true);
       }
     }
 
@@ -831,10 +864,11 @@ export class RunnerSim extends Sim {
     const ty = k.y + lookAhead;
     const tx = centerX(this.seed, ty) + (ai.targetOffset || 0);
     const want = Math.atan2(ty - k.y, tx - k.x);
-    const diff = wrapAngle(want - k.a);
+    const diff = wrapAngle(want - FWD);
     if (k.blindT > 0) ai.noise = Math.max(-0.2, Math.min(0.2, (ai.noise || 0) + (this.rng() - 0.5) * dt * 2));
     else ai.noise = (ai.noise || 0) * 0.85;
-    inp.steer = Math.max(-1, Math.min(1, diff * 2.8 + (ai.noise || 0))) * (k.v < 0 ? -1 : 1);
+    // conducción guiada: steer = cuánto inclinarse hacia el lado deseado
+    inp.steer = Math.max(-1, Math.min(1, (diff / STEER_TILT) * 1.6 + (ai.noise || 0)));
     inp.acc = true;
     inp.brake = false;
 

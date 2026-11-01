@@ -630,14 +630,8 @@ function RacePad({ hud, mode, ctrl, inp, wheelRef, center, portrait, color, slot
       <div className={'pad view' + (tilt ? ' tilt' : '')} style={{ '--c': color }}>
         <GameView raceKey={raceKey} raceInitRef={raceInitRef} mirrorRef={mirrorRef} slot={slot} paused={paused} insetL={0.24} insetR={0.3} />
         <div className="pad-col left">
-          {runner ? (
-            <>
-              <div className="pad-col-big">{jumpBtn}</div>
-              {!tilt && driftBtn}
-            </>
-          ) : (
-            !tilt && <div className="pad-col-big">{driftBtn}</div>
-          )}
+          {/* en Supervivencia no hay derrape (camino recto): el botón grande es SALTO */}
+          {!tilt && <div className="pad-col-big">{runner ? jumpBtn : driftBtn}</div>}
           {itemBtn}
           {powerBtn}
           {brakeBtn}
@@ -651,7 +645,7 @@ function RacePad({ hud, mode, ctrl, inp, wheelRef, center, portrait, color, slot
           </div>
         </div>
         <div className="pad-col right">
-          {tilt ? driftBtn : steerBtns}
+          {tilt ? (runner ? jumpBtn : driftBtn) : steerBtns}
         </div>
         {overlays}
       </div>
@@ -706,7 +700,6 @@ function RacePad({ hud, mode, ctrl, inp, wheelRef, center, portrait, color, slot
       <div className="pad-col right">
         {itemBtn}
         {powerBtn}
-        {runner && driftBtn}
       </div>
       {overlays}
     </div>

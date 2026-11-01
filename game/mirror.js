@@ -154,7 +154,9 @@ export class MirrorSim {
       k.place = b[7];
       if (b[8] !== undefined) k.hearts = b[8];
       if (!k.init) { k.camA = k.a; k.startY = k.y || 300; k.init = true; }
-      k.camA += wrapAngle(k.a - k.camA) * Math.min(1, dt * (k.drift ? 4.2 : 7));
+      // en Supervivencia la cámara siempre mira hacia adelante (camino recto)
+      if (this.runner) k.camA = Math.PI / 2;
+      else k.camA += wrapAngle(k.a - k.camA) * Math.min(1, dt * (k.drift ? 4.2 : 7));
       if (k.v === 0 && !k.human) k.v = 100;
       if (this.runner) {
         if (!k.eliminated) {

@@ -668,6 +668,14 @@ function makeDecor() {
     }
     add('fence', c, 80);
   }
+  { // poste del borde del campo (marca la pared): madera con punta blanca y franja roja
+    const c = mkCanvas(8, 26), x = c.getContext('2d');
+    rect(x, 1, 4, 6, 22, '#7a4620');
+    rect(x, 1, 4, 2, 22, '#9a6032');
+    rect(x, 1, 1, 6, 4, '#f4f0e8');
+    rect(x, 1, 9, 6, 3, '#e8342c');
+    add('post', c, 14);
+  }
   { // calabaza naranja normal (pumpkin) e iluminada (pumpkin_lit)
     const drawBasePumpkin = (x) => {
       rect(x, 8, 1, 2, 3, '#3a6a22');
