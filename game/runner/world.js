@@ -25,6 +25,42 @@ function packHex(hex) {
   return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
 }
 
+const WATER_DEEP = packHex('#1e5eb8');
+const WATER_MID = packHex('#2a7ad8');
+const WATER_RIPPLE = packHex('#58a8ff');
+const WATER_FOAM = packHex('#cfe9ff');
+const ICE_BASE = packHex('#4896e8');
+const ICE_LIGHT = packHex('#78bcf8');
+const ICE_CRACK = packHex('#e8f6ff');
+const ISLAND_RIM = packHex('#d8b068');
+const BOOST_BG = packHex('#ff4d2e');
+const BOOST_CHV = packHex('#ffe45c');
+const BOOST_RIM = packHex('#2ef0ff');
+const BOOST_DARK = packHex('#1e122a');
+const RAMP_A = packHex('#ff9a1e');
+const RAMP_B = packHex('#ffe45c');
+const RAMP_EDGE = packHex('#c8341a');
+const BRIDGE_WOOD_A = packHex('#8a562a');
+const BRIDGE_WOOD_B = packHex('#6e421e');
+const BRIDGE_RAIL = packHex('#4a2a10');
+const GRASS_FARM_DARK = packHex('#b85814');
+const GRASS_FARM_MID = packHex('#df7a20');
+const GRASS_FARM_TIP = packHex('#ffa83a');
+const GRASS_JUNG_DARK = packHex('#145a28');
+const GRASS_JUNG_MID = packHex('#268a44');
+const GRASS_JUNG_TIP = packHex('#72e042');
+const LAVA_DARK = packHex('#8a1e0c');
+const LAVA_MID = packHex('#ff4a14');
+const LAVA_HOT = packHex('#ffd23f');
+const GOO_DARK = packHex('#2a9834');
+const GOO_MID = packHex('#76ea3a');
+const GOO_BUB = packHex('#c8ff6a');
+const HOLE_VOID = packHex('#05020a');
+const HOLE_RIM = packHex('#b44dff');
+const HOLE_STAR = packHex('#7ff6ff');
+const DIRT_A = packHex('#8a5a2a');
+const DIRT_B = packHex('#764a20');
+
 const themeAssetsCache = {};
 
 function getThemeAssets(themeName) {
@@ -82,7 +118,12 @@ export class RunnerWorld {
     this.tex = new Uint32Array(MAP_SIZE * MAP_SIZE);
     this.chunks = new Map(); // chunkIndex -> chunk data
     this.paintedSlot = new Int32Array(MAP_SIZE / CHUNK_TEX_ROWS).fill(-1); // 16 slots in 2048 rows
+    this.paintedTheme = new Array(MAP_SIZE / CHUNK_TEX_ROWS).fill('');
 
+    for (const bm of BIOMES) {
+      getThemeAssets(bm.theme);
+      if (bm.altTheme) getThemeAssets(bm.altTheme);
+    }
     const first = getThemeAssets(BIOMES[0].theme);
     this.theme = first.theme;
     this.th = first.th;
@@ -93,8 +134,8 @@ export class RunnerWorld {
     this.outer = first.outer;
     this.decor = [];
 
-    // Pintar los primeros trozos de inmediato para arrancar sin esperas
-    this.ensure(0, 1900, 16);
+    // Pintar los primeros 16 trozos de inmediato para arrancar sin esperas y calentar el JIT
+    this.ensure(0, 3072, 16);
   }
 
   getChunk(chunkIndex) {
@@ -129,14 +170,21 @@ export class RunnerWorld {
 
   paintChunk(chunkIndex) {
     const chunk = this.getChunk(chunkIndex);
+    const chunkA = getThemeAssets(chunk.theme || 'granja');
     const tex = this.tex;
+    const slot = chunkIndex & 15;
     const row0 = (chunkIndex * CHUNK_TEX_ROWS) & 2047;
+    const prevSlotTheme = this.paintedTheme[slot];
+    let slotThemeUniform = true;
+    let lastEffTheme = '';
 
     for (let r = 0; r < CHUNK_TEX_ROWS; r++) {
       const v = (row0 + r) & 2047;
       const wy = (chunkIndex * CHUNK_TEX_ROWS + r) * TEX_SCALE;
       const b = biomeAt(wy);
       const effTheme = b.altTheme && b.localY < 4500 ? b.altTheme : b.theme;
+      if (r === 0) lastEffTheme = effTheme;
+      else if (effTheme !== lastEffTheme || b.inTransition) slotThemeUniform = false;
       const curA = getThemeAssets(effTheme);
       const prevA = b.inTransition ? getThemeAssets(b.prevTheme) : curA;
       const threshold = (b.t01 * 16) | 0;
@@ -154,46 +202,55 @@ export class RunnerWorld {
 
       const rowOff = v << 11;
       const patRow = (v & 63) << 6;
-      const bayerRow = (v & 3) << 2;
 
-      for (let u = 0; u < MAP_SIZE; u++) {
-        const useCur = !b.inTransition || BAYER4[bayerRow | (u & 3)] < threshold;
-        const A = useCur ? curA : prevA;
-        const patIdx = patRow | (u & 63);
-        let col;
-        if (u < leftWall || u > rightWall) {
-          col = A.outer[patIdx];
-        } else if (u < leftIn || u > rightIn) {
-          col = (u >= leftIn - 2 && u <= rightIn + 2) ? A.borderCol : A.wallPat[patIdx];
-        } else if (u >= pathL && u <= pathR) {
-          col = A.roadPat[patIdx];
-        } else {
-          col = A.offPat[patIdx];
+      if (!b.inTransition) {
+        const outPat = curA.outer;
+        const wallPat = curA.wallPat;
+        const offPat = curA.offPat;
+        const roadPat = curA.roadPat;
+        const borderCol = curA.borderCol;
+        const bL = Math.max(leftWall, leftIn - 2);
+        const bR = Math.min(rightWall, rightIn + 2);
+        const pL = Math.max(leftIn, pathL);
+        const pR = Math.min(rightIn, pathR);
+        // Si este slot ya tenía el mismo tema, los márgenes lejanos (< 440 y > 1608) ya tienen outPat exacto
+        const sameOuter = prevSlotTheme === effTheme;
+        const uStart = sameOuter ? Math.min(leftWall, 440) : 0;
+        const uEnd = sameOuter ? Math.max(rightWall + 1, 1608) : MAP_SIZE;
+
+        let u = uStart;
+        for (; u < leftWall; u++) tex[rowOff | u] = outPat[patRow | (u & 63)];
+        for (; u < bL; u++) tex[rowOff | u] = wallPat[patRow | (u & 63)];
+        for (; u < leftIn; u++) tex[rowOff | u] = borderCol;
+        for (; u < pL; u++) tex[rowOff | u] = offPat[patRow | (u & 63)];
+        for (; u <= pR; u++) tex[rowOff | u] = roadPat[patRow | (u & 63)];
+        for (; u <= rightIn; u++) tex[rowOff | u] = offPat[patRow | (u & 63)];
+        for (; u <= bR; u++) tex[rowOff | u] = borderCol;
+        for (; u <= rightWall; u++) tex[rowOff | u] = wallPat[patRow | (u & 63)];
+        for (; u < uEnd; u++) tex[rowOff | u] = outPat[patRow | (u & 63)];
+      } else {
+        slotThemeUniform = false;
+        const bayerRow = (v & 3) << 2;
+        for (let u = 0; u < MAP_SIZE; u++) {
+          const A = BAYER4[bayerRow | (u & 3)] < threshold ? curA : prevA;
+          const patIdx = patRow | (u & 63);
+          let col;
+          if (u < leftWall || u > rightWall) {
+            col = A.outer[patIdx];
+          } else if (u < leftIn || u > rightIn) {
+            col = (u >= leftIn - 2 && u <= rightIn + 2) ? A.borderCol : A.wallPat[patIdx];
+          } else if (u >= pathL && u <= pathR) {
+            col = A.roadPat[patIdx];
+          } else {
+            col = A.offPat[patIdx];
+          }
+          tex[rowOff | u] = col;
         }
-        tex[rowOff | u] = col;
       }
     }
+    this.paintedTheme[slot] = slotThemeUniform ? lastEffTheme : '';
 
     // Pintar zonas (primero agua e islas; encima puentes, turbos y rampas)
-    const waterDeep = toU32('#1e5eb8');
-    const waterMid = toU32('#2a7ad8');
-    const waterRipple = toU32('#58a8ff');
-    const waterFoam = toU32('#cfe9ff');
-    const iceBase = toU32('#4896e8');
-    const iceLight = toU32('#78bcf8');
-    const iceCrack = toU32('#e8f6ff');
-    const islandRim = toU32('#d8b068');
-    const boostBg = toU32('#ff4d2e');
-    const boostChv = toU32('#ffe45c');
-    const boostRim = toU32('#2ef0ff');
-    const boostDark = toU32('#1e122a');
-    const rampA = toU32('#ff9a1e');
-    const rampB = toU32('#ffe45c');
-    const rampEdge = toU32('#c8341a');
-    const bridgeWoodA = toU32('#8a562a');
-    const bridgeWoodB = toU32('#6e421e');
-    const bridgeRail = toU32('#4a2a10');
-
     // 1. Lagos (congelados con grietas o de agua abierta)
     for (const z of chunk.zones) {
       if (z.type !== 'water') continue;
@@ -208,16 +265,16 @@ export class RunnerWorld {
         for (let uu = u0; uu <= u1; uu++) {
           const borderX = uu <= u0 + 1 || uu >= u1 - 1;
           if (borderX || borderY) {
-            tex[rowOff | uu] = waterFoam;
+            tex[rowOff | uu] = WATER_FOAM;
           } else if (z.frozen) {
             // Grietas blancas sobre hielo azul (icecrack en la textura)
             const c1 = ((uu + vr * 2) % 19) === 0 && ((uu ^ vr) & 3) !== 0;
             const c2 = ((uu * 2 - vr + 1024) % 23) === 0 && ((uu + vr) & 3) !== 0;
-            if (c1 || c2) tex[rowOff | uu] = iceCrack;
-            else tex[rowOff | uu] = ((uu + vr) & 7) === 0 ? iceLight : iceBase;
+            if (c1 || c2) tex[rowOff | uu] = ICE_CRACK;
+            else tex[rowOff | uu] = ((uu + vr) & 7) === 0 ? ICE_LIGHT : ICE_BASE;
           } else {
             const wave = ((uu + (vr >> 1) * 3) % 13) === 0 && (vr & 1) === 0;
-            tex[rowOff | uu] = wave ? waterRipple : (((uu ^ vr) & 4) ? waterMid : waterDeep);
+            tex[rowOff | uu] = wave ? WATER_RIPPLE : (((uu ^ vr) & 4) ? WATER_MID : WATER_DEEP);
           }
         }
       }
@@ -243,30 +300,24 @@ export class RunnerWorld {
           const dx = (uu - uc) / urx;
           const d2 = dx * dx + dy * dy;
           if (d2 <= 1.0) {
-            tex[rowOff | uu] = d2 > 0.78 ? islandRim : curA.offPat[patRow | (uu & 63)];
+            tex[rowOff | uu] = d2 > 0.78 ? ISLAND_RIM : chunkA.offPat[patRow | (uu & 63)];
           } else if (d2 <= 1.15) {
-            tex[rowOff | uu] = waterFoam;
+            tex[rowOff | uu] = WATER_FOAM;
           }
         }
       }
     }
 
     // 2.5 Zonas de pasto/trigo alto (con patrón de hojas de alto contraste)
-    const grassFarmDark = toU32('#b85814');
-    const grassFarmMid = toU32('#df7a20');
-    const grassFarmTip = toU32('#ffa83a');
-    const grassJungDark = toU32('#145a28');
-    const grassJungMid = toU32('#268a44');
-    const grassJungTip = toU32('#72e042');
     for (const z of chunk.zones) {
       if (z.type !== 'grass') continue;
       const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
       const u1 = Math.min(MAP_SIZE - 1, (z.x1 / TEX_SCALE) | 0);
       const vr0 = (z.y0 / TEX_SCALE) | 0;
       const vr1 = (z.y1 / TEX_SCALE) | 0;
-      const cDark = z.jungle ? grassJungDark : grassFarmDark;
-      const cMid = z.jungle ? grassJungMid : grassFarmMid;
-      const cTip = z.jungle ? grassJungTip : grassFarmTip;
+      const cDark = z.jungle ? GRASS_JUNG_DARK : GRASS_FARM_DARK;
+      const cMid = z.jungle ? GRASS_JUNG_MID : GRASS_FARM_MID;
+      const cTip = z.jungle ? GRASS_JUNG_TIP : GRASS_FARM_TIP;
       for (let vr = vr0; vr <= vr1; vr++) {
         const vv = vr & 2047;
         const rowOff = vv << 11;
@@ -278,15 +329,6 @@ export class RunnerWorld {
     }
 
     // 2.6 Zonas de hielo (ice), lava (lava), baba (goo) y huecos al vacío (hole)
-    const lavaDark = toU32('#8a1e0c');
-    const lavaMid = toU32('#ff4a14');
-    const lavaHot = toU32('#ffd23f');
-    const gooDark = toU32('#2a9834');
-    const gooMid = toU32('#76ea3a');
-    const gooBub = toU32('#c8ff6a');
-    const holeVoid = toU32('#05020a');
-    const holeRim = toU32('#b44dff');
-    const holeStar = toU32('#7ff6ff');
     for (const z of chunk.zones) {
       if (z.type !== 'ice' && z.type !== 'lava' && z.type !== 'goo' && z.type !== 'hole') continue;
       const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
@@ -300,23 +342,23 @@ export class RunnerWorld {
         for (let uu = u0; uu <= u1; uu++) {
           const borderX = uu <= u0 + 1 || uu >= u1 - 1;
           if (z.type === 'ice') {
-            if (borderX || borderY) tex[rowOff | uu] = waterFoam;
-            else tex[rowOff | uu] = ((uu + vr * 3) % 17 === 0) ? iceCrack : (((uu ^ vr) & 4) ? iceLight : iceBase);
+            if (borderX || borderY) tex[rowOff | uu] = WATER_FOAM;
+            else tex[rowOff | uu] = ((uu + vr * 3) % 17 === 0) ? ICE_CRACK : (((uu ^ vr) & 4) ? ICE_LIGHT : ICE_BASE);
           } else if (z.type === 'lava') {
-            if (borderX || borderY) tex[rowOff | uu] = lavaDark;
+            if (borderX || borderY) tex[rowOff | uu] = LAVA_DARK;
             else {
               const h = ((uu * 5 + vr * 11) ^ (vr >> 1)) & 15;
-              tex[rowOff | uu] = h < 3 ? lavaHot : h < 11 ? lavaMid : lavaDark;
+              tex[rowOff | uu] = h < 3 ? LAVA_HOT : h < 11 ? LAVA_MID : LAVA_DARK;
             }
           } else if (z.type === 'goo') {
-            if (borderX || borderY) tex[rowOff | uu] = gooDark;
+            if (borderX || borderY) tex[rowOff | uu] = GOO_DARK;
             else {
               const h = ((uu * 9 + vr * 7) ^ (uu >> 1)) & 15;
-              tex[rowOff | uu] = h < 2 ? gooBub : h < 11 ? gooMid : gooDark;
+              tex[rowOff | uu] = h < 2 ? GOO_BUB : h < 11 ? GOO_MID : GOO_DARK;
             }
           } else if (z.type === 'hole') {
-            if (borderX || borderY) tex[rowOff | uu] = holeRim;
-            else tex[rowOff | uu] = ((uu * 31 + vr * 17) & 63) === 0 ? holeStar : holeVoid;
+            if (borderX || borderY) tex[rowOff | uu] = HOLE_RIM;
+            else tex[rowOff | uu] = ((uu * 31 + vr * 17) & 63) === 0 ? HOLE_STAR : HOLE_VOID;
           }
         }
       }
@@ -336,13 +378,13 @@ export class RunnerWorld {
           const ly = vr - vr0;
           for (let uu = u0; uu <= u1; uu++) {
             if (uu === u0 || uu === u1 || vr === vr0 || vr === vr1) {
-              tex[rowOff | uu] = boostDark;
+              tex[rowOff | uu] = BOOST_DARK;
             } else if (uu === u0 + 1 || uu === u1 - 1) {
-              tex[rowOff | uu] = boostRim;
+              tex[rowOff | uu] = BOOST_RIM;
             } else {
               const dx = Math.abs(uu - um);
               const chv = (ly + dx) % 9;
-              tex[rowOff | uu] = chv < 4 ? boostChv : boostBg;
+              tex[rowOff | uu] = chv < 4 ? BOOST_CHV : BOOST_BG;
             }
           }
         }
@@ -358,15 +400,15 @@ export class RunnerWorld {
           const ly = vr - vr0;
           for (let uu = u0; uu <= u1; uu++) {
             if (uu === u0 || uu === u1 || vr === vr0) {
-              tex[rowOff | uu] = boostDark;
+              tex[rowOff | uu] = BOOST_DARK;
             } else if (vr >= vr1 - 2) {
-              tex[rowOff | uu] = boostChv;
+              tex[rowOff | uu] = BOOST_CHV;
             } else if (uu === u0 + 1 || uu === u1 - 1) {
-              tex[rowOff | uu] = rampEdge;
+              tex[rowOff | uu] = RAMP_EDGE;
             } else {
               const dx = Math.abs(uu - um);
               const chv = (ly - (dx >> 1) + 64) % 7;
-              tex[rowOff | uu] = chv < 3 ? rampB : rampA;
+              tex[rowOff | uu] = chv < 3 ? RAMP_B : RAMP_A;
             }
           }
         }
@@ -378,9 +420,9 @@ export class RunnerWorld {
         for (let vr = vr0; vr <= vr1; vr++) {
           const vv = vr & 2047;
           const rowOff = vv << 11;
-          const plank = (vr % 4) === 0 ? bridgeWoodB : bridgeWoodA;
+          const plank = (vr % 4) === 0 ? BRIDGE_WOOD_B : BRIDGE_WOOD_A;
           for (let uu = u0; uu <= u1; uu++) {
-            tex[rowOff | uu] = (uu <= u0 + 1 || uu >= u1 - 1) ? bridgeRail : plank;
+            tex[rowOff | uu] = (uu <= u0 + 1 || uu >= u1 - 1) ? BRIDGE_RAIL : plank;
           }
         }
       }
@@ -433,8 +475,10 @@ export class RunnerWorld {
 
   visibleDecor(c, sim) {
     const minY = c.y - 50;
-    const maxY = c.y + 1400;
-    this.ensure(minY - 250, maxY + 250, 2);
+    const maxY = c.y + 1350;
+    const maxGrassY = c.y + 650;
+    const maxDecorY = c.y + 1150;
+    this.ensure(minY - 150, maxY + 150, 1);
     const c0 = Math.max(0, Math.floor(minY / CHUNK_LEN));
     const c1 = Math.max(c0, Math.floor(maxY / CHUNK_LEN));
     const out = [];
@@ -447,7 +491,8 @@ export class RunnerWorld {
         out.push(o);
       }
       for (const d of ch.decor) {
-        if (d.y < minY || d.y > maxY || d.cut) continue;
+        if (d.y < minY || d.cut) continue;
+        if (d.kind === 'grasstuft' ? d.y > maxGrassY : (d.kind !== 'gate' && d.y > maxDecorY)) continue;
         out.push(d);
       }
       if (ch.pickups) {
@@ -472,8 +517,6 @@ export class RunnerWorld {
     const u0 = (x / TEX_SCALE) | 0;
     const v0 = (y / TEX_SCALE) | 0;
     const rad = Math.max(2, Math.round(r / TEX_SCALE));
-    const dirtA = toU32('#8a5a2a');
-    const dirtB = toU32('#764a20');
 
     for (let dy = -rad; dy <= rad; dy++) {
       const vv = (v0 + dy) & 2047;
@@ -482,7 +525,7 @@ export class RunnerWorld {
       for (let dx = -span; dx <= span; dx++) {
         const uu = u0 + dx;
         if (uu >= 0 && uu < MAP_SIZE) {
-          tex[rowOff | uu] = ((uu + vv) & 1) ? dirtA : dirtB;
+          tex[rowOff | uu] = ((uu + vv) & 1) ? DIRT_A : DIRT_B;
         }
       }
     }
