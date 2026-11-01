@@ -596,6 +596,7 @@ export class RunnerSim extends Sim {
   collectPickup(k, pk) {
     if (this.taken.has(pk.id)) return;
     this.taken.add(pk.id);
+    if (this.recentTaken) this.recentTaken.push(pk.id);
     this.emit({ type: 'pickup', id: pk.id, pickupType: pk.type, kart: k.id });
     if (pk.type === 'heart') {
       if (k.hearts < MAX_HEARTS) {

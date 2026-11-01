@@ -4,6 +4,7 @@
 import { generateChunk, verifyFreeCorridor, obstacleStateAt, biomeAt } from '../game/runner/layout.js';
 import { RunnerSim } from '../game/runner/sim.js';
 import { MIN_CORRIDOR_W, BIOMES, BIOME_LENGTH, CHUNK_LEN } from '../game/runner/config.js';
+import { MirrorSim, raceInitMsg, snapshotMsg } from '../game/mirror.js';
 
 function assert(cond, msg) {
   if (!cond) {
@@ -297,6 +298,25 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
     for (let s = 0; s < 15; s++) pSim.step(1 / 60);
     assert(other.hearts === 3, `El poder de ${chId} no debe quitar corazones`);
   }
+
+  // Prueba de MirrorSim y mensajes de red del modo (T17): raceInitMsg, snapshotMsg, ch, tk, corazones y cutGrass
+  const netSim = new RunnerSim({ seed: 777, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
+  netSim.started = true;
+  netSim.countdown = 0;
+  const initMsg = raceInitMsg(netSim, 'runner');
+  assert(initMsg.runner && initMsg.runner.seed === 777 && initMsg.runner.difficulty === 1, 'raceInitMsg debe incluir runner: { seed, difficulty }');
+  const mSim = new MirrorSim(initMsg, netSim.world);
+  assert(mSim.runner && mSim.mode === 'runner', 'MirrorSim debe activar modo runner');
+  // Recoger un pickup y perder un corazón, luego enviar snapshot
+  netSim.karts[0].hearts = 2;
+  netSim.chaserY = 412.5;
+  netSim.collectPickup(netSim.karts[0], { id: 'pk_test_1', type: 'shield', x: 1500, y: 800 });
+  const snap1 = snapshotMsg(netSim, []);
+  assert(snap1.ch === 412.5 && Array.isArray(snap1.tk) && snap1.tk.includes('pk_test_1'), 'snapshotMsg debe incluir ch y tk con los IDs recogidos');
+  assert(snap1.k[0][8] === 2, 'snapshotMsg debe incluir los corazones del kart en el índice 8');
+  mSim.push(snap1);
+  mSim.advance(1 / 60);
+  assert(mSim.taken.has('pk_test_1') && mSim.karts[0].hearts === 2 && Math.abs(mSim.chaserY - 412.5) < 1, 'MirrorSim debe sincronizar ch, tk y corazones');
 }
 
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades

@@ -235,7 +235,21 @@ export class GameHost {
   localHud() {
     const k = this.localKart();
     if (!k) return null;
-    return { drift: k.driftLevel, power: k.power, charges: k.charges, item: k.rouletteT > 0 ? '?' : k.item, started: this.sim.started };
+    const runner = this.sim.mode === 'runner';
+    return {
+      mode: this.sim.mode,
+      drift: k.driftLevel,
+      power: k.power,
+      charges: k.charges,
+      item: k.rouletteT > 0 ? '?' : k.item,
+      started: this.sim.started,
+      hearts: runner ? k.hearts : 0,
+      alive: runner ? this.sim.karts.filter((o) => !o.eliminated).length : 0,
+      total: this.sim.karts.length,
+      dist: runner ? Math.round(k.distance || 0) : 0,
+      danger: runner ? Math.max(0, Math.round(k.y - (this.sim.chaserY || 0))) : 0,
+      biome: runner && this.sim.biome ? this.sim.biome.name : '',
+    };
   }
 
   lobbyMsg(slot) {
@@ -799,7 +813,12 @@ export class GameHost {
     for (const e of ev) {
       if (e.type === 'sfx') { this.audio.sfx(e.name); if (this.sfxOut.length < 12 && !this.sfxOut.includes(e.name)) this.sfxOut.push(e.name); }
       else if (e.type === 'buzz') this.send(e.slot, { t: 'buzz', ms: e.ms });
-      else if (e.type === 'biome' && THEMES[e.theme]) this.audio.playSong(THEMES[e.theme].music);
+      else if (e.type === 'biome' && THEMES[e.theme]) {
+        const song = THEMES[e.theme].music;
+        this.audio.playSong(song);
+        if (this.raceInit) this.raceInit.song = song;
+        this.viewers().forEach((p) => this.send(p.slot, { t: 'song', song }));
+      }
       else if (e.type === 'done') { this.sim.events.length = 0; this.endRace(); return; }
     }
     ev.length = 0;
@@ -811,6 +830,8 @@ export class GameHost {
 
   sendHud() {
     const sim = this.sim;
+    const runner = sim.mode === 'runner';
+    const alive = runner ? sim.karts.filter((o) => !o.eliminated).length : 0;
     for (const k of sim.karts) {
       if (!k.human) continue;
       const p = this.players[k.slot];
@@ -822,6 +843,11 @@ export class GameHost {
         count: sim.started ? 0 : Math.ceil(sim.countdown), drift: k.driftLevel, boost: k.boostT > 0, msg: k.messageT > 0 ? k.message : '', char: k.char,
         obj: sim.objectiveText || '',
         ft: k.finished ? Math.round(k.finishTime * 100) / 100 : 0, fl: Math.round(k.flashT * 100) / 100, v: Math.round(k.v),
+        hearts: runner ? k.hearts : 0,
+        alive,
+        dist: runner ? Math.round(k.distance || 0) : 0,
+        danger: runner ? Math.max(0, Math.round(k.y - (sim.chaserY || 0))) : 0,
+        biome: runner && sim.biome ? sim.biome.name : '',
       });
     }
   }

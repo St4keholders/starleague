@@ -498,12 +498,21 @@ function HostPad({ host, st, steerMode, tilt, portrait, items }) {
   const dirs = useRef({ l: false, r: false });
   const steer = (side, v) => () => { dirs.current[side] = v; li.steer = (dirs.current.r ? 1 : 0) - (dirs.current.l ? 1 : 0); };
   const tiltOn = steerMode === 'tilt';
+  const runner = st.mode === 'runner' || h.mode === 'runner';
   const driftCls = 'drift' + (h.drift === 2 ? ' lv2' : h.drift === 1 ? ' lv1' : '');
   const driftBtn = <PadBtn cls={driftCls} onDown={() => { li.drift = true; }} onUp={() => { li.drift = false; }}>DERRAPE</PadBtn>;
+  const jumpBtn = <PadBtn cls="jump" onDown={() => host.localPress('jump')}>SALTO</PadBtn>;
   return (
     <div className={'pad view host-pad' + (tiltOn ? ' tilt' : '')} style={{ '--c': SLOT_COLORS[st.local] }}>
       <div className="pad-col left">
-        {!tiltOn && <div className="pad-col-big">{driftBtn}</div>}
+        {runner ? (
+          <>
+            <div className="pad-col-big">{jumpBtn}</div>
+            {!tiltOn && driftBtn}
+          </>
+        ) : (
+          !tiltOn && <div className="pad-col-big">{driftBtn}</div>
+        )}
         <PadBtn cls="item" onDown={() => host.localPress('item')}>OBJETO</PadBtn>
         <PadBtn cls={'power' + (h.power >= 1 || h.charges > 0 ? ' ready' : '')} onDown={() => host.localPress('power')}>PODER</PadBtn>
         <PadBtn cls="brake" onDown={() => { li.brake = true; }} onUp={() => { li.brake = false; }}>FRENO</PadBtn>

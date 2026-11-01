@@ -176,6 +176,7 @@ button:disabled { cursor: default; opacity: 0.5; }
 .pad-btn.acc { flex: 2.2; background: #1f7a45; border-color: #3ddc84; font-size: clamp(10px, 3vh, 17px); }
 .pad-btn.acc.auto { opacity: 0.45; }
 .pad-btn.brake { background: #7a1f2c; border-color: var(--coral); }
+.pad-btn.jump { flex: 2; background: #8a6508; border-color: var(--gold); color: #fff8d0; }
 .pad-btn.drift { flex: 2; background: #1f4a7a; border-color: #59c8ff; }
 .pad-btn.drift.lv1 { box-shadow: 0 5px 0 #07040f, 0 0 0 3px #59c8ff; }
 .pad-btn.drift.lv2 { box-shadow: 0 5px 0 #07040f, 0 0 0 3px #ffa21e; border-color: #ffa21e; }
@@ -192,6 +193,8 @@ button:disabled { cursor: default; opacity: 0.5; }
 .pad-place small { font-size: 0.4em; color: var(--mute); text-shadow: none; }
 .bal { width: 14px; height: 18px; border-radius: 50%; background: rgba(255, 255, 255, 0.15); display: inline-block; }
 .bal.on { background: var(--c); }
+.hrt { font-size: clamp(14px, 4.5vh, 24px); color: rgba(255, 255, 255, 0.22); text-shadow: none; }
+.hrt.on { color: #ff4d5e; text-shadow: 2px 2px 0 #07040f; }
 .pad-lap { font-family: var(--pix); font-size: 10px; color: #fff; }
 .pad-pause { margin-left: auto; font-family: var(--pix); font-size: 10px; padding: 7px 9px; background: #1a0f33; border: 2px solid var(--line); }
 .pad-status { display: flex; align-items: center; gap: 10px; width: 100%; }
@@ -246,6 +249,7 @@ button:disabled { cursor: default; opacity: 0.5; }
 .pad.view .pad-btn.pressed { transform: none; background: rgba(255, 255, 255, 0.28); filter: none; }
 .pad.view .pad-btn.acc { background: rgba(31, 122, 69, 0.38); border-color: rgba(61, 220, 132, 0.7); }
 .pad.view .pad-btn.brake { background: rgba(122, 31, 44, 0.38); border-color: rgba(255, 77, 94, 0.7); }
+.pad.view .pad-btn.jump { background: rgba(168, 120, 14, 0.45); border-color: rgba(255, 210, 63, 0.85); color: #fff8d0; }
 .pad.view .pad-btn.drift { background: rgba(31, 74, 122, 0.38); border-color: rgba(89, 200, 255, 0.7); }
 .pad.view .pad-btn.drift.lv1 { border-color: #59c8ff; box-shadow: 0 0 0 2px #59c8ff; }
 .pad.view .pad-btn.drift.lv2 { border-color: #ffa21e; box-shadow: 0 0 0 2px #ffa21e; }

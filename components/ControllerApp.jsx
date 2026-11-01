@@ -57,7 +57,7 @@ export default function ControllerApp() {
   const connRef = useRef(null);
   const phaseRef = useRef('lobby');
   const ctrlRef = useRef(ctrl);
-  const inp = useRef({ steer: 0, brake: false, drift: false, left: false, right: false, ic: 0, pc: 0 });
+  const inp = useRef({ steer: 0, brake: false, drift: false, left: false, right: false, ic: 0, pc: 0, jc: 0 });
   const tilt = useRef({ theta: 0, theta0: 0, got: false, smooth: 0, lastAng: null });
   const wheelRef = useRef(null);
   const barRef = useRef(null);
@@ -124,6 +124,11 @@ export default function ControllerApp() {
           if (mirrorRef.current) mirrorRef.current.push(m);
           if (m.s && m.s.length && viewRef.current && ctrlRef.current.sound && audioRef.current) m.s.forEach((n) => audioRef.current.sfx(n));
           break;
+        case 'song':
+          if (viewRef.current && ctrlRef.current.sound && audioRef.current && audioRef.current.ctx && typeof m.song === 'number') {
+            audioRef.current.playSong(m.song);
+          }
+          break;
         case 'buzz': if (navigator.vibrate) { try { navigator.vibrate(m.ms); } catch (e) { /* nada */ } } break;
         case 'paused': setPaused(!!m.v); break;
         case 'full': setStatus('full'); dead = true; break;
@@ -172,7 +177,7 @@ export default function ControllerApp() {
       if (phaseRef.current !== 'race') return;
       const i = inp.current, c = ctrlRef.current;
       let steer = c.mode === 'tilt' && tilt.current.got ? tilt.current.smooth : (i.right ? 1 : 0) - (i.left ? 1 : 0);
-      send({ t: 'in', s: Math.round(steer * 100) / 100, b: i.brake, d: i.drift, ic: i.ic, pc: i.pc });
+      send({ t: 'in', s: Math.round(steer * 100) / 100, b: i.brake, d: i.drift, ic: i.ic, pc: i.pc, jc: i.jc });
     }, 33);
     return () => clearInterval(id);
   }, []);
@@ -303,7 +308,7 @@ export default function ControllerApp() {
   if (phase === 'race') {
     return (
       <RacePad
-        hud={hud} ctrl={{ ...ctrl, view: viewOn }} inp={inp} wheelRef={wheelRef} center={center} portrait={portrait}
+        hud={hud} mode={pinfo.mode} ctrl={{ ...ctrl, view: viewOn }} inp={inp} wheelRef={wheelRef} center={center} portrait={portrait}
         color={color} slot={slot} art={art} paused={paused} lost={lost} isHost={isHost}
         onPause={() => send({ t: 'pause' })} onQuit={() => send({ t: 'quit' })}
         sensorOn={sensor === 'on'} activateSensor={activateSensor}
@@ -380,13 +385,20 @@ export default function ControllerApp() {
   }
 
   if (phase === 'results' || phase === 'podium') {
+    const runner = pinfo.mode === 'runner';
     return (
       <div className="m-screen m-center" style={{ '--c': color }}>
         <div className="m-tag">{SLOT_NAMES[slot]}</div>
         {phase === 'results' ? (
           <>
             <div className="m-big">{pinfo.place ? `${pinfo.place}º` : '¡Listo!'}</div>
-            <p>{pinfo.mode === 'battle' ? (pinfo.place === 1 ? '¡Ganaste la batalla!' : 'Batalla terminada') : pinfo.place === 1 ? '¡Ganaste la carrera!' : 'Carrera terminada'}</p>
+            <p>
+              {runner
+                ? (pinfo.place === 1 ? '¡Último en pie!' : 'Partida terminada')
+                : pinfo.mode === 'battle'
+                  ? (pinfo.place === 1 ? '¡Ganaste la batalla!' : 'Batalla terminada')
+                  : pinfo.place === 1 ? '¡Ganaste la carrera!' : 'Carrera terminada'}
+            </p>
           </>
         ) : (
           <>
@@ -396,7 +408,10 @@ export default function ControllerApp() {
         )}
         {isHost ? (
           <>
-            <button className="m-btn gold wide" onClick={() => send({ t: 'next' })}>{phase === 'podium' ? 'Volver al lobby' : pinfo.cup ? (pinfo.cupLeft > 0 ? 'Siguiente carrera' : 'Ver podio') : 'Volver al lobby'}</button>
+            <button className="m-btn gold wide" onClick={() => send({ t: 'next' })}>
+              {phase === 'podium' ? 'Volver al lobby' : runner ? 'Otra partida' : pinfo.cup ? (pinfo.cupLeft > 0 ? 'Siguiente carrera' : 'Ver podio') : 'Volver al lobby'}
+            </button>
+            {phase === 'results' && runner && <button className="m-btn wide" onClick={() => send({ t: 'quit' })}>Volver al lobby</button>}
             {phase === 'results' && pinfo.cupLeft > 0 && <button className="m-btn wide" onClick={() => send({ t: 'quit' })}>Abandonar copa</button>}
           </>
         ) : <p className="m-small">Esperando a que J1 continúe…</p>}
@@ -506,11 +521,21 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22
     setState('loading');
     (async () => {
       try {
-        const [{ buildTrack }, { Renderer, drawCinemaFx }, { MirrorSim }] = await Promise.all([import('../game/trackgfx'), import('../game/render'), import('../game/mirror')]);
+        const [{ buildTrack }, { Renderer, drawCinemaFx }, { MirrorSim }, { RunnerWorld }] = await Promise.all([
+          import('../game/trackgfx'),
+          import('../game/render'),
+          import('../game/mirror'),
+          import('../game/runner/world'),
+        ]);
         await new Promise((r) => setTimeout(r, 40));
         if (!alive) return;
-        if (!trackCache[init.track]) trackCache[init.track] = buildTrack(init.track);
-        const track = trackCache[init.track];
+        let track;
+        if (init.runner) {
+          track = new RunnerWorld(init.runner.seed, init.runner.difficulty);
+        } else {
+          if (!trackCache[init.track]) trackCache[init.track] = buildTrack(init.track);
+          track = trackCache[init.track];
+        }
         if (!alive) return;
         const m = new MirrorSim(init, track);
         mirrorRef.current = m;
@@ -543,6 +568,10 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22
             return;
           }
           const me = m.karts.find((k) => k.human && k.slot === slot) || m.karts.reduce((x, y) => (x.place < y.place ? x : y));
+          if (m.runner && track.ensure) {
+            const refY = me && !me.eliminated ? me.y : m.leaderY || 320;
+            track.ensure(Math.min(m.chaserY || 0, refY) - 300, Math.max(m.leaderY || 0, refY) + 1700, 4);
+          }
           renderer.render(m, [me], { paused: pausedRef.current, hudInset: renderer.inset });
         };
         raf = requestAnimationFrame(frame);
@@ -560,16 +589,19 @@ function GameView({ raceKey, raceInitRef, mirrorRef, slot, paused, insetL = 0.22
   );
 }
 
-function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art, paused, lost, isHost, onPause, onQuit, sensorOn, activateSensor, raceKey, raceInitRef, mirrorRef, onToggleView }) {
+function RacePad({ hud, mode, ctrl, inp, wheelRef, center, portrait, color, slot, art, paused, lost, isHost, onPause, onQuit, sensorOn, activateSensor, raceKey, raceInitRef, mirrorRef, onToggleView }) {
   const set = (k, v) => () => { inp.current[k] = v; };
   const inc = (k) => () => { inp.current[k]++; };
   useEffect(() => () => { const i = inp.current; i.brake = i.drift = i.left = i.right = false; }, [inp]);
   const h = hud || {};
-  const battle = h.mode === 'battle';
+  const curMode = h.mode || mode || (raceInitRef.current && raceInitRef.current.mode);
+  const battle = curMode === 'battle';
+  const runner = curMode === 'runner';
   const tilt = ctrl.mode === 'tilt';
   const view = !!ctrl.view;
   const driftCls = 'drift' + (h.drift === 2 ? ' lv2' : h.drift === 1 ? ' lv1' : '');
   const driftBtn = <PadBtn cls={driftCls} onDown={set('drift', true)} onUp={set('drift', false)}>DERRAPE</PadBtn>;
+  const jumpBtn = <PadBtn cls="jump" onDown={inc('jc')}>SALTO</PadBtn>;
   const itemBtn = <PadBtn cls="item" onDown={inc('ic')}>OBJETO</PadBtn>;
   const powerBtn = <PadBtn cls={'power' + (h.power >= 1 || h.charges > 0 ? ' ready' : '')} onDown={inc('pc')}>PODER</PadBtn>;
   const brakeBtn = <PadBtn cls="brake" onDown={set('brake', true)} onUp={set('brake', false)}>FRENO</PadBtn>;
@@ -598,7 +630,14 @@ function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art,
       <div className={'pad view' + (tilt ? ' tilt' : '')} style={{ '--c': color }}>
         <GameView raceKey={raceKey} raceInitRef={raceInitRef} mirrorRef={mirrorRef} slot={slot} paused={paused} insetL={0.24} insetR={0.3} />
         <div className="pad-col left">
-          {!tilt && <div className="pad-col-big">{driftBtn}</div>}
+          {runner ? (
+            <>
+              <div className="pad-col-big">{jumpBtn}</div>
+              {!tilt && driftBtn}
+            </>
+          ) : (
+            !tilt && <div className="pad-col-big">{driftBtn}</div>
+          )}
           {itemBtn}
           {powerBtn}
           {brakeBtn}
@@ -623,18 +662,24 @@ function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art,
   return (
     <div className="pad" style={{ '--c': color }}>
       <div className="pad-col left">
-        <div className="pad-col-big">{driftBtn}</div>
+        <div className="pad-col-big">{runner ? jumpBtn : driftBtn}</div>
         {brakeBtn}
       </div>
       <div className="pad-mid">
         <div className="pad-top">
           <div className="pad-tag">{SLOT_NAMES[slot]}</div>
-          {battle ? (
+          {runner ? (
+            <div className="pad-place">{[0, 1, 2].map((i) => <span key={i} className={'hrt' + (i < (h.hearts ?? 3) ? ' on' : '')}>♥</span>)}</div>
+          ) : battle ? (
             <div className="pad-place">{[0, 1, 2].map((i) => <span key={i} className={'bal' + (i < (h.balloons ?? 3) ? ' on' : '')} />)}</div>
           ) : (
             <div className="pad-place">{h.place || '-'}º<small>/{h.total || 8}</small></div>
           )}
-          {!battle && <div className="pad-lap">V {h.lap || 1}/{h.laps || 3}</div>}
+          {runner ? (
+            <div className="pad-lap">VIVOS {h.alive ?? 6}/{h.total || 6} · {(h.dist || 0).toLocaleString('es-ES')} m</div>
+          ) : !battle ? (
+            <div className="pad-lap">V {h.lap || 1}/{h.laps || 3}</div>
+          ) : null}
           <button className="pad-pause" onClick={onToggleView} title="Ver el juego en el celular">📺</button>
           <button className="pad-pause" onClick={onPause}>II</button>
         </div>
@@ -661,6 +706,7 @@ function RacePad({ hud, ctrl, inp, wheelRef, center, portrait, color, slot, art,
       <div className="pad-col right">
         {itemBtn}
         {powerBtn}
+        {runner && driftBtn}
       </div>
       {overlays}
     </div>
