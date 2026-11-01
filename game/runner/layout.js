@@ -292,6 +292,48 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
       }
     }
 
+    // Zonas de pasto/trigo alto que deja surco (granja y jungla)
+    if ((biome.id === 'granja' || biome.id === 'jungla') && (chunkIndex % 2 === 0 || rng() < 0.65)) {
+      const gy0 = Math.round((y0 + 18 + rng() * 28) * 10) / 10;
+      const gy1 = Math.round((gy0 + 88 + rng() * 52) * 10) / 10;
+      const gyMid = (gy0 + gy1) * 0.5;
+      const cxy = centerX(seed, gyMid);
+      const hwy = halfW(seed, gyMid);
+      const gHalfW = 75 + rng() * 55;
+      const gSide = rng() < 0.5 ? -1 : 1;
+      const gx = cxy + gSide * (40 + rng() * Math.max(20, hwy - gHalfW - 65));
+      const gx0 = Math.round((gx - gHalfW) * 10) / 10;
+      const gx1 = Math.round((gx + gHalfW) * 10) / 10;
+      if (isHazardAt({ zones }, gx, gyMid) !== 'water') {
+        zones.push({
+          id: mkId('z'),
+          type: 'grass',
+          jungle: biome.id === 'jungla',
+          x0: gx0,
+          x1: gx1,
+          y0: gy0,
+          y1: gy1,
+        });
+        // Repartir mechones grasstuft (~1 cada 40×40 u)
+        for (let ty = gy0 + 16; ty <= gy1 - 12; ty += 38) {
+          for (let tx = gx0 + 16; tx <= gx1 - 12; tx += 38) {
+            const jx = Math.round((tx + (rng() - 0.5) * 16) * 10) / 10;
+            const jy = Math.round((ty + (rng() - 0.5) * 16) * 10) / 10;
+            if (isHazardAt({ zones }, jx, jy) === 'water') continue;
+            decor.push({
+              id: mkId('gt'),
+              kind: 'grasstuft',
+              jungle: biome.id === 'jungla',
+              x: jx,
+              y: jy,
+              solid: false,
+              cut: false,
+            });
+          }
+        }
+      }
+    }
+
     const dens = DIFF_OBS_DENSITY[difficulty] ?? 1.0;
     const baseCount = Math.max(1, Math.round((2 + Math.floor(rng() * 3)) * dens));
 

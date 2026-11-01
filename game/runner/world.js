@@ -250,6 +250,32 @@ export class RunnerWorld {
       }
     }
 
+    // 2.5 Zonas de pasto/trigo alto (con patrón de hojas de alto contraste)
+    const grassFarmDark = toU32('#b85814');
+    const grassFarmMid = toU32('#df7a20');
+    const grassFarmTip = toU32('#ffa83a');
+    const grassJungDark = toU32('#145a28');
+    const grassJungMid = toU32('#268a44');
+    const grassJungTip = toU32('#72e042');
+    for (const z of chunk.zones) {
+      if (z.type !== 'grass') continue;
+      const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
+      const u1 = Math.min(MAP_SIZE - 1, (z.x1 / TEX_SCALE) | 0);
+      const vr0 = (z.y0 / TEX_SCALE) | 0;
+      const vr1 = (z.y1 / TEX_SCALE) | 0;
+      const cDark = z.jungle ? grassJungDark : grassFarmDark;
+      const cMid = z.jungle ? grassJungMid : grassFarmMid;
+      const cTip = z.jungle ? grassJungTip : grassFarmTip;
+      for (let vr = vr0; vr <= vr1; vr++) {
+        const vv = vr & 2047;
+        const rowOff = vv << 11;
+        for (let uu = u0; uu <= u1; uu++) {
+          const h = ((uu * 7 + vr * 13) ^ (uu >> 1)) & 7;
+          tex[rowOff | uu] = h < 2 ? cTip : h < 5 ? cMid : cDark;
+        }
+      }
+    }
+
     // 3. Puentes, turbos y rampas encima
     for (const z of chunk.zones) {
       if (z.type === 'boost') {
@@ -392,5 +418,38 @@ export class RunnerWorld {
       }
     }
     return out;
+  }
+
+  cutGrass(x, y, r = 9) {
+    const tex = this.tex;
+    const u0 = (x / TEX_SCALE) | 0;
+    const v0 = (y / TEX_SCALE) | 0;
+    const rad = Math.max(2, Math.round(r / TEX_SCALE));
+    const dirtA = toU32('#8a5a2a');
+    const dirtB = toU32('#764a20');
+
+    for (let dy = -rad; dy <= rad; dy++) {
+      const vv = (v0 + dy) & 2047;
+      const rowOff = vv << 11;
+      const span = Math.round(Math.sqrt(Math.max(0, rad * rad - dy * dy)));
+      for (let dx = -span; dx <= span; dx++) {
+        const uu = u0 + dx;
+        if (uu >= 0 && uu < MAP_SIZE) {
+          tex[rowOff | uu] = ((uu + vv) & 1) ? dirtA : dirtB;
+        }
+      }
+    }
+
+    const ci = Math.max(0, Math.floor(y / CHUNK_LEN));
+    const ch = this.getChunk(ci);
+    if (ch && ch.decor) {
+      for (const d of ch.decor) {
+        if (d.kind === 'grasstuft' && !d.cut) {
+          if (Math.hypot(d.x - x, d.y - y) < 12) {
+            d.cut = true;
+          }
+        }
+      }
+    }
   }
 }

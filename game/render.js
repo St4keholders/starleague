@@ -281,7 +281,11 @@ export class Renderer {
         }
         continue;
       }
-      const kind = d.kind === 'pumpkin' && d.lit ? 'pumpkin_lit' : d.kind;
+      const kind = d.kind === 'pumpkin' && d.lit
+        ? 'pumpkin_lit'
+        : d.kind === 'grasstuft' && d.jungle
+          ? 'grasstuft_jungle'
+          : d.kind;
       const spec = sp.decor[kind] || sp.decor[d.kind];
       if (!spec) continue;
       // Colocar la fachada del granero en el borde frontal (y0) para coincidir con el techo

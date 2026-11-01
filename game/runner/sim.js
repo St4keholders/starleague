@@ -51,6 +51,19 @@ function makeHeadlessWorld(seed, difficulty) {
       }
       return c;
     },
+    cutGrass(x, y, r = 9) {
+      void r;
+      this.grassCuts = (this.grassCuts || 0) + 1;
+      const ci = Math.max(0, Math.floor(y / CHUNK_LEN));
+      const ch = this.getChunk(ci);
+      if (ch && ch.decor) {
+        for (const d of ch.decor) {
+          if (d.kind === 'grasstuft' && !d.cut && Math.hypot(d.x - x, d.y - y) < 12) {
+            d.cut = true;
+          }
+        }
+      }
+    },
   };
 }
 
@@ -357,6 +370,9 @@ export class RunnerSim extends Sim {
       } else if (k.spinT <= 0 && k.v < k.maxV * 0.7 && (k.human ? !(k.input && k.input.brake) : true)) {
         k.v = Math.min(k.maxV, k.v + k.accel * 0.7 * dt);
       }
+      if (k.surface === 'grass' && k.boostT <= 0 && k.v > k.maxV * 0.92) {
+        k.v = k.maxV * 0.92;
+      }
     }
   }
 
@@ -415,6 +431,7 @@ export class RunnerSim extends Sim {
           k.surface = 'goo';
         } else if (hz === 'grass') {
           k.surface = 'grass';
+          if (this.world.cutGrass) this.world.cutGrass(k.x, k.y, 9);
         } else if (hz === 'water' || hz === 'lava' || hz === 'hole') {
           this.fallInHazard(k, hz);
           break;

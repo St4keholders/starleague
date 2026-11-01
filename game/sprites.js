@@ -743,6 +743,26 @@ function makeDecor() {
     rect(x, 13, 13, 2, 2, '#ffffff');
     add('shieldpick', c, 20, 10);
   }
+  { // mechón de trigo/pasto alto naranja (grasstuft) y verde lima (grasstuft_jungle)
+    const drawTuft = (x, cDark, cMid, cTip) => {
+      rect(x, 6, 6, 2, 8, cDark);
+      rect(x, 3, 7, 2, 7, cDark);
+      rect(x, 9, 7, 2, 7, cDark);
+      rect(x, 2, 4, 2, 4, cMid);
+      rect(x, 6, 2, 2, 5, cMid);
+      rect(x, 10, 4, 2, 4, cMid);
+      rect(x, 1, 2, 2, 2, cTip);
+      rect(x, 6, 0, 2, 2, cTip);
+      rect(x, 11, 2, 2, 2, cTip);
+    };
+    const c1 = mkCanvas(14, 14), x1 = c1.getContext('2d');
+    drawTuft(x1, '#b85a14', '#e8862a', '#ffd25a');
+    add('grasstuft', c1, 14);
+
+    const c2 = mkCanvas(14, 14), x2 = c2.getContext('2d');
+    drawTuft(x2, '#1e7a36', '#3ddc68', '#b8ff4a');
+    add('grasstuft_jungle', c2, 14);
+  }
   return D;
 }
 

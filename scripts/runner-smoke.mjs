@@ -219,6 +219,31 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   assert(Math.abs(k.y - waterY) < 0.01 && k.z === 30 && k.invulnT > 0, 'Debe reaparecer en la misma Y con z=30 e invulnT');
 }
 
+// 2.9 Verificar pasto alto (grass), mechones (grasstuft), surco persistente (cutGrass) y freno a 0.92
+{
+  const sim = new RunnerSim({ seed: 654, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
+  sim.started = true;
+  const k = sim.karts[0];
+  let grassChunk = null, grassZone = null, tuft = null;
+  for (let ci = 3; ci < 50; ci++) {
+    const ch = sim.world.getChunk(ci);
+    const gz = ch.zones.find((z) => z.type === 'grass');
+    const gt = ch.decor.find((d) => d.kind === 'grasstuft' && !d.cut);
+    if (gz && gt) {
+      grassChunk = ch;
+      grassZone = gz;
+      tuft = gt;
+      break;
+    }
+  }
+  assert(grassChunk && grassZone && tuft, 'Deben generarse zonas grass y mechones grasstuft');
+  k.x = tuft.x; k.y = tuft.y; k.z = 0; k._prevZ = 0; k.boostT = 0; k.v = k.maxV;
+  sim.updateKart(k, 1 / 60);
+  assert(k.surface === 'grass', 'El kart dentro de una zona grass debe tener surface="grass"');
+  assert(tuft.cut === true && sim.world.grassCuts > 0, 'cutGrass debe cortar el mechón cercano y dejar surco persistente');
+  assert(k.v <= k.maxV * 0.92 + 0.01, 'El pasto alto debe frenar la velocidad máxima a 0.92');
+}
+
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades
 console.log('3) Simulando partidas automáticas (10 semillas × 3 dificultades)...');
 const MATCH_SEEDS = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];
