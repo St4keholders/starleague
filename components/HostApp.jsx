@@ -356,7 +356,7 @@ function Results({ st, host, portraits }) {
                 {runner && (
                   <td className="rs">
                     {r.reason === 'ganador'
-                      ? '¡Último en pie!'
+                      ? (r.place === 1 ? '¡Último en pie!' : 'Seguía en pie')
                       : r.reason === 'vidas'
                         ? 'Sin vidas'
                         : `Lo atrapó ${r.chaserName || 'el perseguidor'}`}
