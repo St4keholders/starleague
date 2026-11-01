@@ -50,7 +50,11 @@ export class Renderer {
     this.noLabels = !!ui.cinema;
     const vps = layoutFor(viewKarts.length, this.W, this.H);
     const cams = viewKarts.map((k, i) => this.makeCam(k, vps[i]));
-    cams.forEach((c) => { this.drawSky(c); this.drawFloor(c); });
+    cams.forEach((c) => {
+      if (this.t.runner) this.t.applyBiomeFor(this, c.target.y);
+      this.drawSky(c);
+      this.drawFloor(c);
+    });
     // cuadrante vacío con 3 jugadores
     if (viewKarts.length === 3) this.fillRect(vps[3], 0xff201430);
     ctx.putImageData(this.img, 0, 0);
@@ -155,7 +159,25 @@ export class Renderer {
       let wy = (c.y + sa * f - ca * hw * scale) * ks;
       const sx = -sa * scale * ks, sy = ca * scale * ks;
       const fog = f > FOG0 ? (f - FOG0) / (FOG1 - FOG0) : 0;
-      if (fog <= 0) {
+      if (this.t.ring) {
+        if (fog <= 0) {
+          for (let x = 0; x < vp.w; x++) {
+            const u = wx | 0, v = (wy | 0) & 2047;
+            buf[o++] = (u & ~2047) === 0 ? tex[(v << 11) | u] : outer[((v & 63) << 6) | (u & 63)];
+            wx += sx; wy += sy;
+          }
+        } else {
+          const inv = 1 - fog;
+          const fR = fr * fog, fG = fg * fog, fB = fb * fog;
+          for (let x = 0; x < vp.w; x++) {
+            const u = wx | 0, v = (wy | 0) & 2047;
+            const col = (u & ~2047) === 0 ? tex[(v << 11) | u] : outer[((v & 63) << 6) | (u & 63)];
+            const r = ((col & 255) * inv + fR) | 0, g = (((col >> 8) & 255) * inv + fG) | 0, b = (((col >> 16) & 255) * inv + fB) | 0;
+            buf[o++] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
+            wx += sx; wy += sy;
+          }
+        }
+      } else if (fog <= 0) {
         for (let x = 0; x < vp.w; x++) {
           const u = wx | 0, v = wy | 0;
           buf[o++] = ((u | v) & ~2047) === 0 ? tex[(v << 11) | u] : outer[((v & 63) << 6) | (u & 63)];
@@ -192,7 +214,8 @@ export class Renderer {
     const push = (p, draw) => { if (p && p.sx > -80 && p.sx < c.vp.w + 80) list.push({ f: p.f, p, draw }); };
 
     // decoración
-    for (const d of t.decor) {
+    const decorList = t.runner ? t.visibleDecor(c, sim) : t.decor;
+    for (const d of decorList) {
       const spec = sp.decor[d.kind];
       if (!spec) continue;
       const p = this.proj(c, d.x, d.y, spec.float || 0);

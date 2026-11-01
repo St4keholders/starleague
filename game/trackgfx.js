@@ -101,9 +101,20 @@ export const THEMES = {
     wall: '#ffd23f',
     music: 5,
   },
+  granja: {
+    skyTop: '#4aa6ff', skyHor: '#ffd1a6', fog: '#ffd9b3',
+    road: '#8a5a2a', roadNoise: ['#7a4d22', '#9a6834', '#6e441c'],
+    curbA: '#d9a05b', curbB: '#6e441c',
+    off: '#e8862a', offNoise: ['#d4761f', '#f29a3c', '#c96a1a'],
+    wall: '#8a8a90', wallNoise: ['#74747a', '#9e9ea6'],
+    out: '#6e6e76', outNoise: ['#5e5e66', '#7d7d86', '#8a8a90'],
+    water: '#2a7ad8', iceCrack: '#cfe9ff',
+    ice: '#cfe9ff',
+    music: 0,
+  },
 };
 
-function noiseTile(base, noise, rng, size = 32, density = 0.35, star = false) {
+export function noiseTile(base, noise, rng, size = 32, density = 0.35, star = false) {
   const c = mkCanvas(size, size);
   const x = c.getContext('2d');
   x.fillStyle = base; x.fillRect(0, 0, size, size);
@@ -141,14 +152,14 @@ function zoneQuad(ctx, cl, w, z, draw) {
   ctx.restore();
 }
 
-function toU32(canvas) {
+export function toU32(canvas) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   return new Uint32Array(img.data.buffer);
 }
 
 // ---------- fondo del cielo (tira panorámica 2048x80) ----------
-function makeSkyStrip(theme, rng) {
+export function makeSkyStrip(theme, rng) {
   const W = 2048, H = 80;
   const c = mkCanvas(W, H), x = c.getContext('2d');
   const mountains = (base, amp, col, step, rough) => {
@@ -262,6 +273,25 @@ function makeSkyStrip(theme, rng) {
     x.fillStyle = '#3a2a6a'; x.fillRect(0, 50, W, 30);
     for (let i = 0; i < 700; i++) { x.fillStyle = ['#ff4d5e', '#3fa0ff', '#3ddc84', '#ffd23f', '#ffffff', '#ff8a1e'][Math.floor(rng() * 6)]; x.fillRect(rng() * W, 52 + rng() * 24, 2, 2); }
     x.fillStyle = '#ffd23f'; x.fillRect(0, 76, W, 4);
+  } else if (theme === 'granja') {
+    for (let i = 0; i < 12; i++) cloud(rng() * W, 12 + rng() * 20, 0.8 + rng() * 0.7, 'rgba(255,244,225,0.92)');
+    // acantilados grises y colinas de otoño
+    mountains(58, 24, '#8a8a90', 18, 6);
+    mountains(68, 14, '#d4761f', 14, 4);
+    mountains(74, 8, '#e8862a', 12, 3);
+    // graneros rojos y molinos lejanos
+    for (let i = 0; i < 10; i++) {
+      const px = Math.floor((i + 0.3 + rng() * 0.4) * (W / 10));
+      // granero lejano
+      x.fillStyle = '#c83228'; x.fillRect(px, 56, 14, 10);
+      x.fillStyle = '#3a3a44'; x.beginPath(); x.moveTo(px - 2, 56); x.lineTo(px + 7, 49); x.lineTo(px + 16, 56); x.fill();
+      x.fillStyle = '#ffffff'; x.fillRect(px + 5, 60, 4, 6);
+      // molino lejano al lado
+      const mx = px + 26;
+      x.fillStyle = '#8a8a90'; x.fillRect(mx, 48, 3, 18);
+      x.fillStyle = '#e8342c'; x.beginPath(); x.arc(mx + 1.5, 48, 5, 0, Math.PI * 2); x.fill();
+      x.fillStyle = '#ffffff'; x.beginPath(); x.arc(mx + 1.5, 48, 2, 0, Math.PI * 2); x.fill();
+    }
   }
   return toU32(c);
 }
