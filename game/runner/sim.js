@@ -23,7 +23,7 @@ import {
   maxGapAt,
   chaserSpeed,
 } from './config.js';
-import { centerX, centerSlope, halfW, biomeAt, generateChunk } from './layout.js';
+import { centerX, centerSlope, halfW, biomeAt, generateChunk, isHazardAt } from './layout.js';
 
 const KART_R = 9;
 
@@ -245,6 +245,75 @@ export class RunnerSim extends Sim {
     }
   }
 
+  findSafeX(x, y) {
+    const cx = centerX(this.seed, y);
+    const hw = halfW(this.seed, y);
+    const left = cx - hw + 24;
+    const right = cx + hw - 24;
+    const ci = Math.max(0, Math.floor(y / CHUNK_LEN));
+    const ch = this.world.getChunk(ci);
+
+    let bestX = cx;
+    let bestDist = Infinity;
+    for (let sx = left; sx <= right; sx += 10) {
+      const hz = isHazardAt(ch, sx, y);
+      if (hz === 'water' || hz === 'lava' || hz === 'hole') continue;
+      let blocked = false;
+      for (const o of ch.obstacles) {
+        if (!o.solid) continue;
+        const hx = (o.w ? o.w * 0.5 : o.r || 16) + KART_R + 6;
+        const hy = (o.h ? o.h * 0.5 : o.r || 16) + KART_R + 6;
+        if (Math.abs(sx - o.x) < hx && Math.abs(y - o.y) < hy) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue;
+      const d = Math.abs(sx - x);
+      if (d < bestDist) {
+        bestDist = d;
+        bestX = sx;
+      }
+    }
+    return bestX;
+  }
+
+  respawn(k) {
+    const safeY = k.respawnY !== undefined ? k.respawnY : k.y;
+    const safeX = k.respawnX !== undefined ? k.respawnX : this.findSafeX(k.x, safeY);
+    k.x = safeX;
+    k.y = safeY;
+    k.z = 30;
+    k.vz = 0;
+    k.a = Math.atan2(1, centerSlope(this.seed, safeY));
+    k.v = 95;
+    k.vx = Math.cos(k.a) * k.v;
+    k.vy = Math.sin(k.a) * k.v;
+    k.invulnT = INVULN_DURATION;
+    k.surface = 'road';
+    k.fallT = 0;
+  }
+
+  fallInHazard(k, hz) {
+    if (k.eliminated || this.demo) return;
+    if (k.shieldT > 0) {
+      k.shieldT = 0;
+      k.invulnT = 1.0;
+      this.sfx('pop');
+      this.say(k, '¡ESCUDO!', 0.9);
+      return;
+    }
+    if (k.invulnT > 0) return;
+
+    k.respawnY = k.y;
+    k.respawnX = this.findSafeX(k.x, k.y);
+    this.damageKart(k, 'vidas', false);
+    this.sfx(hz === 'water' ? 'splash' : 'fall');
+    if (!k.eliminated) {
+      this.respawn(k);
+    }
+  }
+
   groundAt(x, y, prevZ = 0) {
     const ci = Math.floor(y / CHUNK_LEN);
     let maxH = 0;
@@ -338,6 +407,19 @@ export class RunnerSim extends Sim {
     // Zonas y recogibles en los trozos cercanos
     for (let cIdx = Math.max(0, ci - 1); cIdx <= ci + 1; cIdx++) {
       const ch = this.world.getChunk(cIdx);
+      if (k.y >= ch.y0 - 8 && k.y <= ch.y1 + 8 && gH === 0 && k.z <= 2) {
+        const hz = isHazardAt(ch, k.x, k.y);
+        if (hz === 'ice') {
+          k.surface = 'ice';
+        } else if (hz === 'goo') {
+          k.surface = 'goo';
+        } else if (hz === 'grass') {
+          k.surface = 'grass';
+        } else if (hz === 'water' || hz === 'lava' || hz === 'hole') {
+          this.fallInHazard(k, hz);
+          break;
+        }
+      }
       if (ch.zones) {
         for (const z of ch.zones) {
           if (z.type === 'boost' && k.z <= gH + 4) {
@@ -475,6 +557,7 @@ export class RunnerSim extends Sim {
       for (let c = -3; c <= 3; c++) {
         const candOff = (c / 3) * (hwLook * 0.84);
         let minClear = 999;
+        let hazardPen = 0;
 
         for (let s = 18; s <= 240; s += 18) {
           const sy = k.y + s;
@@ -484,6 +567,14 @@ export class RunnerSim extends Sim {
 
           for (let ci = ci0; ci <= ci1; ci++) {
             const ch = this.world.getChunk(ci);
+            if (sy >= ch.y0 && sy <= ch.y1) {
+              const hz = isHazardAt(ch, sx, sy);
+              if (hz === 'water' || hz === 'lava' || hz === 'hole') {
+                hazardPen -= 1000;
+              } else if (hz === 'goo') {
+                hazardPen -= 200;
+              }
+            }
             for (const o of ch.obstacles) {
               if (!o.solid) continue;
               let d;
@@ -500,7 +591,7 @@ export class RunnerSim extends Sim {
         }
 
         const curOff = k.x - centerX(this.seed, k.y);
-        let score = minClear * 5 - Math.abs(candOff - curOff) * 0.12 - Math.abs(candOff) * 0.04;
+        let score = minClear * 5 + hazardPen - Math.abs(candOff - curOff) * 0.12 - Math.abs(candOff) * 0.04;
         if (score > bestScore) {
           bestScore = score;
           bestOff = candOff;
@@ -509,10 +600,15 @@ export class RunnerSim extends Sim {
       ai.targetOffset = bestOff;
     }
 
-    // Saltar si hay un obstáculo saltable justo adelante a menos de 55 u
+    // Saltar si hay un obstáculo saltable o canal de agua/lava/hueco justo adelante a menos de 55 u
     const ciNow = Math.max(0, Math.floor(k.y / CHUNK_LEN));
     for (let ci = ciNow; ci <= ciNow + 1; ci++) {
       const ch = this.world.getChunk(ci);
+      const hzAhead = isHazardAt(ch, k.x, k.y + 32);
+      if (hzAhead === 'water' || hzAhead === 'lava' || hzAhead === 'hole') {
+        inp.jump = true;
+        break;
+      }
       for (const o of ch.obstacles) {
         if (!o.solid || !o.jumpable) continue;
         const dy = o.y - k.y;

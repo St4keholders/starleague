@@ -165,6 +165,60 @@ console.log('   ✓ Pasillo libre OK (1.490 trozos verificados).');
   assert(k.hearts === 2, 'Entrar al granero con z < h - 8 debe producir un choque (-1 corazón)');
 }
 
+// 2.8 Verificar lagos con hielo (seguro), islas/puentes (seguro) y agua sin hielo (-1 corazón y reaparición en la misma Y)
+{
+  const sim = new RunnerSim({ seed: 321, humans: [{ slot: 0, char: 'pipo' }], difficulty: 1 });
+  sim.started = true;
+  const k = sim.karts[0];
+
+  let frozenZone = null, openWaterChunk = null, openWaterZone = null, islandZone = null;
+  for (let ci = 3; ci < 80; ci++) {
+    const ch = sim.world.getChunk(ci);
+    for (const z of ch.zones) {
+      if (z.type === 'water' && z.frozen && !frozenZone) frozenZone = z;
+      if (z.type === 'water' && !z.frozen && !openWaterZone) {
+        openWaterChunk = ch;
+        openWaterZone = z;
+        islandZone = ch.zones.find((oz) => oz.type === 'island');
+      }
+    }
+    if (frozenZone && openWaterZone && islandZone) break;
+  }
+  assert(frozenZone && openWaterZone && islandZone, 'Deben generarse lagos congelados, de agua abierta e islas');
+
+  // a) Lago congelado con grietas de hielo: seguro, cambia surface a 'ice'
+  k.hearts = 3; k.invulnT = 0; k.z = 0; k._prevZ = 0;
+  k.x = (frozenZone.x0 + frozenZone.x1) * 0.5;
+  k.y = (frozenZone.y0 + frozenZone.y1) * 0.5;
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 3 && k.surface === 'ice', 'El lago congelado debe ser seguro y poner surface="ice"');
+
+  // b) Isla dentro del agua abierta: segura
+  k.hearts = 3; k.invulnT = 0; k.z = 0; k._prevZ = 0;
+  k.x = islandZone.x;
+  k.y = islandZone.y;
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 3, 'La isla sobre el agua debe ser segura');
+
+  // c) Agua abierta fuera de isla y puente: quita 1 corazón y reaparece a la misma Y con z = 30
+  const bridge = openWaterChunk.zones.find((z) => z.type === 'bridge');
+  let waterX = openWaterZone.x0 + 18;
+  for (let tx = openWaterZone.x0 + 15; tx <= openWaterZone.x1 - 15; tx += 12) {
+    const onBridge = bridge && tx >= bridge.x0 && tx <= bridge.x1;
+    const onIsland = Math.hypot((tx - islandZone.x) / islandZone.rx, (islandZone.y - islandZone.y) / islandZone.ry) <= 1.05;
+    if (!onBridge && !onIsland) {
+      waterX = tx;
+      break;
+    }
+  }
+  const waterY = (openWaterZone.y0 + openWaterZone.y1) * 0.5;
+  k.hearts = 3; k.invulnT = 0; k.z = 0; k._prevZ = 0;
+  k.x = waterX; k.y = waterY;
+  sim.bounds(k, 1 / 60);
+  assert(k.hearts === 2, 'Caer al agua sin hielo debe quitar 1 corazón');
+  assert(Math.abs(k.y - waterY) < 0.01 && k.z === 30 && k.invulnT > 0, 'Debe reaparecer en la misma Y con z=30 e invulnT');
+}
+
 // 3. Partidas automáticas: RunnerSim con 6 bots, 10 semillas × 3 dificultades
 console.log('3) Simulando partidas automáticas (10 semillas × 3 dificultades)...');
 const MATCH_SEEDS = [101, 202, 303, 404, 505, 606, 707, 808, 909, 1010];

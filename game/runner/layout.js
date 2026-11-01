@@ -113,6 +113,43 @@ function overlapsExisting(x, y, rad, obstacles, pad = 16) {
   return false;
 }
 
+// Devuelve el tipo de superficie/peligro en (x, y) dentro de un trozo:
+// null (seguro/tierra/puente/isla), 'ice' (seguro pero resbaloso), 'grass' (frena), 'goo' (frena),
+// o 'water' / 'lava' / 'hole' (letal si está en el piso).
+export function isHazardAt(chunk, x, y) {
+  if (!chunk || !chunk.zones) return null;
+  // Primero verificar si está sobre un puente o una isla segura
+  for (const z of chunk.zones) {
+    if (z.type === 'bridge') {
+      if (x >= z.x0 && x <= z.x1 && y >= z.y0 && y <= z.y1) return null;
+    } else if (z.type === 'island') {
+      const dx = (x - z.x) / (z.rx || 36);
+      const dy = (y - z.y) / (z.ry || 28);
+      if (dx * dx + dy * dy <= 1) return null;
+    }
+  }
+  // Luego verificar agua, lava, huecos, hielo, baba o pasto
+  let surf = null;
+  for (const z of chunk.zones) {
+    if (x < z.x0 || x > z.x1 || y < z.y0 || y > z.y1) continue;
+    if (z.type === 'water') {
+      if (z.frozen) surf = 'ice';
+      else return 'water';
+    } else if (z.type === 'lava') {
+      return 'lava';
+    } else if (z.type === 'hole') {
+      return 'hole';
+    } else if (z.type === 'ice') {
+      surf = 'ice';
+    } else if (z.type === 'goo') {
+      surf = 'goo';
+    } else if (z.type === 'grass' && !surf) {
+      surf = 'grass';
+    }
+  }
+  return surf;
+}
+
 // Verifica que en el trozo exista al menos un pasillo vertical libre de ancho >= minWidth
 // haciendo un barrido en X cada 10 unidades dentro de los límites jugables del trozo.
 export function verifyFreeCorridor(seed, chunk, minWidth = MIN_CORRIDOR_W) {
@@ -134,6 +171,15 @@ export function verifyFreeCorridor(seed, chunk, minWidth = MIN_CORRIDOR_W) {
       if (Math.abs(x - o.x) < hx + 9) {
         blocked = true;
         break;
+      }
+    }
+    if (!blocked && chunk.zones && chunk.zones.length > 0) {
+      for (let sy = chunk.y0 + 16; sy < chunk.y1; sy += 24) {
+        const hz = isHazardAt(chunk, x, sy);
+        if (hz === 'water' || hz === 'lava' || hz === 'hole') {
+          blocked = true;
+          break;
+        }
       }
     }
     if (!blocked) {
@@ -178,6 +224,74 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
 
   // Los primeros 3 trozos (zona de salida) no tienen obstáculos
   if (chunkIndex >= SAFE_START_CHUNKS) {
+    // Lagos (con grietas de hielo seguros o lagos de agua abierta con isla y puente)
+    if (chunkIndex % 5 === 1) {
+      const frozen = chunkIndex % 10 === 1 || rng() < 0.55;
+      const wy0 = Math.round((y0 + 36 + rng() * 24) * 10) / 10;
+      const wy1 = Math.round((wy0 + 76 + rng() * 28) * 10) / 10;
+      const wyMid = (wy0 + wy1) * 0.5;
+      const cxy = centerX(seed, wyMid);
+      const hwy = halfW(seed, wyMid);
+
+      if (frozen) {
+        // Lago congelado con grietas de hielo (seguro para cruzar)
+        const wx = cxy + (rng() * 2 - 1) * (hwy * 0.35);
+        const ww = 120 + rng() * 80;
+        zones.push({
+          id: mkId('z'),
+          type: 'water',
+          frozen: true,
+          x0: Math.round((wx - ww) * 10) / 10,
+          x1: Math.round((wx + ww) * 10) / 10,
+          y0: wy0,
+          y1: wy1,
+        });
+      } else {
+        // Lago lateral de agua abierta (quita 1 corazón) fuera del pasillo libre, con isla y puente
+        const side = corrCenter >= cxy ? -1 : 1;
+        const lakeHalfW = 90 + rng() * 30;
+        const lakeCx = side < 0
+          ? Math.max(cxy - hwy + lakeHalfW + 24, corrMinX - lakeHalfW - 16)
+          : Math.min(cxy + hwy - lakeHalfW - 24, corrMaxX + lakeHalfW + 16);
+        const wx0 = Math.round((lakeCx - lakeHalfW) * 10) / 10;
+        const wx1 = Math.round((lakeCx + lakeHalfW) * 10) / 10;
+        zones.push({
+          id: mkId('z'),
+          type: 'water',
+          frozen: false,
+          x0: wx0,
+          x1: wx1,
+          y0: wy0,
+          y1: wy1,
+        });
+        // Isla en medio del lago
+        const islX = Math.round((lakeCx + side * 18) * 10) / 10;
+        const islY = Math.round(wyMid * 10) / 10;
+        zones.push({
+          id: mkId('z'),
+          type: 'island',
+          x: islX,
+          y: islY,
+          rx: 38,
+          ry: 26,
+          x0: islX - 38,
+          x1: islX + 38,
+          y0: islY - 26,
+          y1: islY + 26,
+        });
+        // Puente seguro en el borde del lago más cercano al centro
+        const brX = side < 0 ? wx1 - 28 : wx0 + 28;
+        zones.push({
+          id: mkId('z'),
+          type: 'bridge',
+          x0: Math.round((brX - 24) * 10) / 10,
+          x1: Math.round((brX + 24) * 10) / 10,
+          y0: Math.round((wy0 - 6) * 10) / 10,
+          y1: Math.round((wy1 + 6) * 10) / 10,
+        });
+      }
+    }
+
     const dens = DIFF_OBS_DENSITY[difficulty] ?? 1.0;
     const baseCount = Math.max(1, Math.round((2 + Math.floor(rng() * 3)) * dens));
 
@@ -198,6 +312,7 @@ export function generateChunk(seed, chunkIndex, difficulty = 1) {
         const ry = Math.round(y * 10) / 10;
         if (overlapsCorridor(x, halfExt + 10, corrMinX, corrMaxX)) continue;
         if (overlapsExisting(x, ry, halfExt, obstacles, 18)) continue;
+        if (isHazardAt({ zones }, x, ry) === 'water') continue;
 
         const obs = {
           id: mkId('o'),

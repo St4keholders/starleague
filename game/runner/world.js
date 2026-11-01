@@ -173,7 +173,15 @@ export class RunnerWorld {
       }
     }
 
-    // Pintar zonas (turbos en el piso, rampas, puentes, etc.)
+    // Pintar zonas (primero agua e islas; encima puentes, turbos y rampas)
+    const waterDeep = toU32('#1e5eb8');
+    const waterMid = toU32('#2a7ad8');
+    const waterRipple = toU32('#58a8ff');
+    const waterFoam = toU32('#cfe9ff');
+    const iceBase = toU32('#4896e8');
+    const iceLight = toU32('#78bcf8');
+    const iceCrack = toU32('#e8f6ff');
+    const islandRim = toU32('#d8b068');
     const boostBg = toU32('#ff4d2e');
     const boostChv = toU32('#ffe45c');
     const boostRim = toU32('#2ef0ff');
@@ -184,6 +192,65 @@ export class RunnerWorld {
     const bridgeWoodA = toU32('#8a562a');
     const bridgeWoodB = toU32('#6e421e');
     const bridgeRail = toU32('#4a2a10');
+
+    // 1. Lagos (congelados con grietas o de agua abierta)
+    for (const z of chunk.zones) {
+      if (z.type !== 'water') continue;
+      const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
+      const u1 = Math.min(MAP_SIZE - 1, (z.x1 / TEX_SCALE) | 0);
+      const vr0 = (z.y0 / TEX_SCALE) | 0;
+      const vr1 = (z.y1 / TEX_SCALE) | 0;
+      for (let vr = vr0; vr <= vr1; vr++) {
+        const vv = vr & 2047;
+        const rowOff = vv << 11;
+        const borderY = vr <= vr0 + 1 || vr >= vr1 - 1;
+        for (let uu = u0; uu <= u1; uu++) {
+          const borderX = uu <= u0 + 1 || uu >= u1 - 1;
+          if (borderX || borderY) {
+            tex[rowOff | uu] = waterFoam;
+          } else if (z.frozen) {
+            // Grietas blancas sobre hielo azul (icecrack en la textura)
+            const c1 = ((uu + vr * 2) % 19) === 0 && ((uu ^ vr) & 3) !== 0;
+            const c2 = ((uu * 2 - vr + 1024) % 23) === 0 && ((uu + vr) & 3) !== 0;
+            if (c1 || c2) tex[rowOff | uu] = iceCrack;
+            else tex[rowOff | uu] = ((uu + vr) & 7) === 0 ? iceLight : iceBase;
+          } else {
+            const wave = ((uu + (vr >> 1) * 3) % 13) === 0 && (vr & 1) === 0;
+            tex[rowOff | uu] = wave ? waterRipple : (((uu ^ vr) & 4) ? waterMid : waterDeep);
+          }
+        }
+      }
+    }
+
+    // 2. Islas seguras sobre el agua
+    for (const z of chunk.zones) {
+      if (z.type !== 'island') continue;
+      const u0 = Math.max(0, ((z.x - z.rx) / TEX_SCALE) | 0);
+      const u1 = Math.min(MAP_SIZE - 1, ((z.x + z.rx) / TEX_SCALE) | 0);
+      const vr0 = ((z.y - z.ry) / TEX_SCALE) | 0;
+      const vr1 = ((z.y + z.ry) / TEX_SCALE) | 0;
+      const uc = z.x / TEX_SCALE;
+      const vc = z.y / TEX_SCALE;
+      const urx = Math.max(2, z.rx / TEX_SCALE);
+      const vry = Math.max(2, z.ry / TEX_SCALE);
+      for (let vr = vr0; vr <= vr1; vr++) {
+        const vv = vr & 2047;
+        const rowOff = vv << 11;
+        const patRow = (vv & 63) << 6;
+        const dy = (vr - vc) / vry;
+        for (let uu = u0; uu <= u1; uu++) {
+          const dx = (uu - uc) / urx;
+          const d2 = dx * dx + dy * dy;
+          if (d2 <= 1.0) {
+            tex[rowOff | uu] = d2 > 0.78 ? islandRim : curA.offPat[patRow | (uu & 63)];
+          } else if (d2 <= 1.15) {
+            tex[rowOff | uu] = waterFoam;
+          }
+        }
+      }
+    }
+
+    // 3. Puentes, turbos y rampas encima
     for (const z of chunk.zones) {
       if (z.type === 'boost') {
         const u0 = Math.max(0, (z.x0 / TEX_SCALE) | 0);
